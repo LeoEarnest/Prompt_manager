@@ -1,5 +1,6 @@
 """HTTP routes for the prompt manager."""
 from flask import Blueprint, Response, jsonify, render_template, request
+from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
 
 from . import db
@@ -213,3 +214,32 @@ def delete_prompt(prompt_id: int) -> Response:
     db.session.commit()
 
     return Response(status=204)
+
+
+@api_bp.route('/search')
+def search_prompts() -> Response:
+    """Return prompts matching the provided query across title and content."""
+
+    raw_query = request.args.get('q', '', type=str)
+    keyword = raw_query.strip()
+    if not keyword:
+        return jsonify([])
+
+    lowered = f"%{keyword.lower()}%"
+
+    prompts = (
+        Prompt.query.options(
+            selectinload(Prompt.subtopic).selectinload(Subtopic.domain)
+        )
+        .filter(
+            or_(
+                func.lower(Prompt.title).like(lowered),
+                func.lower(Prompt.content).like(lowered),
+            )
+        )
+        .order_by(Prompt.title.asc())
+        .all()
+    )
+
+    payload = [_serialize_prompt(prompt) for prompt in prompts]
+    return jsonify(payload)

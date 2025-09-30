@@ -246,3 +246,72 @@ def test_delete_prompt_success_and_missing(app, client):
     delete_missing = client.delete(f'/api/prompts/{prompt_id}')
     assert delete_missing.status_code == 404
     assert delete_missing.get_json()['error'] == 'Prompt not found'
+
+
+def test_search_endpoint_matches_title_and_content(app, client):
+    """Search endpoint should match case-insensitive title and content fragments."""
+
+    with app.app_context():
+        domain = Domain(name='Product Discovery')
+        insights = Subtopic(name='Insights', domain=domain)
+        experiments = Subtopic(name='Experiments', domain=domain)
+
+        prompt_a = Prompt(
+            title='Focus Finder',
+            content='Build a focus plan for the day.',
+            subtopic=insights,
+        )
+        prompt_b = Prompt(
+            title='Morning Routine',
+            content='Start every morning with a focus review.',
+            subtopic=insights,
+        )
+        prompt_c = Prompt(
+            title='Experiment Tracker',
+            content='Log nightly learnings from experiments.',
+            subtopic=experiments,
+        )
+
+        db.session.add_all([domain, prompt_a, prompt_b, prompt_c])
+        db.session.commit()
+
+    response = client.get('/api/search', query_string={'q': 'focus'})
+    assert response.status_code == 200
+    data = response.get_json()
+    titles = {item['title'] for item in data}
+    assert titles == {'Focus Finder', 'Morning Routine'}
+    assert all(item['domain_name'] == 'Product Discovery' for item in data)
+
+    content_response = client.get('/api/search', query_string={'q': 'nightly'})
+    assert content_response.status_code == 200
+    content_results = content_response.get_json()
+    assert [item['title'] for item in content_results] == ['Experiment Tracker']
+
+
+def test_search_endpoint_handles_empty_or_missing_query(app, client):
+    """Blank search queries should return an empty list without errors."""
+
+    empty_response = client.get('/api/search', query_string={'q': ''})
+    assert empty_response.status_code == 200
+    assert empty_response.get_json() == []
+
+    missing_response = client.get('/api/search')
+    assert missing_response.status_code == 200
+    assert missing_response.get_json() == []
+
+
+def test_search_endpoint_returns_empty_for_no_matches(app, client):
+    """Searching with no matching prompts should return an empty collection."""
+
+    with app.app_context():
+        domain = Domain(name='Wellness')
+        subtopic = Subtopic(name='Habits', domain=domain)
+        db.session.add_all([
+            domain,
+            Prompt(title='Gratitude Journal', content='Write three gratitudes.', subtopic=subtopic),
+        ])
+        db.session.commit()
+
+    response = client.get('/api/search', query_string={'q': 'prototype'})
+    assert response.status_code == 200
+    assert response.get_json() == []

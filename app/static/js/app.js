@@ -21,6 +21,9 @@
     const formError = doc.querySelector('[data-role="form-error"]');
     const formCancelButton = doc.querySelector('[data-role="form-cancel-button"]');
     const formSubmitButton = doc.querySelector('[data-role="form-submit-button"]');
+    const searchInput = doc.querySelector('[data-role="search-input"]');
+    const hierarchyContainer = doc.querySelector('[data-role="hierarchy-container"]');
+    const searchResultsContainer = doc.querySelector('[data-role="search-results"]');
 
     if (
         !appContainer ||
@@ -42,7 +45,10 @@
         !subtopicSelect ||
         !formError ||
         !formCancelButton ||
-        !formSubmitButton
+        !formSubmitButton ||
+        !searchInput ||
+        !hierarchyContainer ||
+        !searchResultsContainer
     ) {
         return;
     }
@@ -55,6 +61,11 @@
     const DEFAULT_MODAL_TITLE = modalTitle.textContent.trim() || 'Create New Prompt';
     const LOADING_SUBMIT_LABEL = 'Loading...';
     const SAVING_SUBMIT_LABEL = 'Saving...';
+    const DEFAULT_SEARCH_MESSAGE = 'Type to search your prompts.';
+    const NO_RESULTS_MESSAGE = 'No prompts match your search.';
+    const SEARCH_ERROR_MESSAGE = 'Unable to search right now. Please try again.';
+    const SEARCH_LOADING_MESSAGE = 'Searching...';
+    const SEARCH_DEBOUNCE_MS = 300;
 
     const MODAL_MODE = {
         CREATE: 'create',
@@ -72,6 +83,9 @@
     let activeModalTrigger = null;
     let isSubmittingPrompt = false;
     let editingPromptId = null;
+    let searchDebounceTimer = null;
+    let latestSearchRequest = 0;
+    let isSearchActive = false;
 
     const escapeSelector = (value) => {
         if (window.CSS && typeof window.CSS.escape === 'function') {
@@ -152,15 +166,169 @@
 
     const resetPromptDetailPanel = () => {
         currentPromptId = null;
-        currentPromptNavButton = null;
-        currentPromptMeta = null;
-        breadcrumbDomain.textContent = 'Domain';
-        breadcrumbSubtopic.textContent = 'Subtopic';
-        promptTitle.textContent = DEFAULT_PROMPT_TITLE;
-        setPromptContent(DEFAULT_PROMPT_MESSAGE);
-        disableCopyButton();
-        resetCopyButtonLabel();
-        disableDetailActions();
+       currentPromptNavButton = null;
+       currentPromptMeta = null;
+       breadcrumbDomain.textContent = 'Domain';
+       breadcrumbSubtopic.textContent = 'Subtopic';
+       promptTitle.textContent = DEFAULT_PROMPT_TITLE;
+       setPromptContent(DEFAULT_PROMPT_MESSAGE);
+       disableCopyButton();
+       resetCopyButtonLabel();
+       disableDetailActions();
+    };
+
+    const renderSearchMessage = (message) => {
+        searchResultsContainer.innerHTML = '';
+        const paragraph = doc.createElement('p');
+        paragraph.className = 'empty-state';
+        paragraph.textContent = message;
+        searchResultsContainer.appendChild(paragraph);
+    };
+
+    const renderSearchResults = (items) => {
+        if (!Array.isArray(items) || items.length === 0) {
+            renderSearchMessage(NO_RESULTS_MESSAGE);
+            return;
+        }
+
+        const list = doc.createElement('ul');
+        list.className = 'search-results-list';
+
+        items.forEach((promptData) => {
+            if (!promptData || typeof promptData !== 'object') {
+                return;
+            }
+
+            const promptId = promptData.id;
+            const title = (promptData.title || '').trim();
+            const domainName = (promptData.domain_name || '').trim() || 'Domain';
+            const subtopicName = (promptData.subtopic_name || '').trim() || 'Subtopic';
+            const domainIdRaw = promptData.domain_id;
+            const subtopicIdRaw = promptData.subtopic_id;
+            const domainId = typeof domainIdRaw === 'number' ? domainIdRaw : Number(domainIdRaw);
+            const subtopicId = typeof subtopicIdRaw === 'number' ? subtopicIdRaw : Number(subtopicIdRaw);
+
+            if (!promptId || !title || Number.isNaN(subtopicId)) {
+                return;
+            }
+
+            const listItem = doc.createElement('li');
+            listItem.className = 'prompt-list-item';
+
+            const button = doc.createElement('button');
+            button.type = 'button';
+            button.className = 'prompt-button';
+            button.dataset.id = String(promptId);
+            button.dataset.domain = domainName;
+            button.dataset.subtopic = subtopicName;
+            button.dataset.subtopicId = String(subtopicId);
+            if (!Number.isNaN(domainId)) {
+                button.dataset.domainId = String(domainId);
+            }
+            button.textContent = title;
+
+            listItem.appendChild(button);
+            list.appendChild(listItem);
+        });
+
+        if (!list.children.length) {
+            renderSearchMessage(NO_RESULTS_MESSAGE);
+            return;
+        }
+
+        searchResultsContainer.innerHTML = '';
+        searchResultsContainer.appendChild(list);
+    };
+
+    const showHierarchyView = () => {
+        isSearchActive = false;
+        hierarchyContainer.hidden = false;
+        searchResultsContainer.hidden = true;
+        renderSearchMessage(DEFAULT_SEARCH_MESSAGE);
+    };
+
+    const showSearchView = () => {
+        isSearchActive = true;
+        hierarchyContainer.hidden = true;
+        searchResultsContainer.hidden = false;
+    };
+
+    const executeSearch = async (query) => {
+        latestSearchRequest += 1;
+        const requestToken = latestSearchRequest;
+
+        showSearchView();
+        renderSearchMessage(SEARCH_LOADING_MESSAGE);
+
+        try {
+            const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+            if (requestToken !== latestSearchRequest) {
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error(`Failed to search prompts: ${response.status}`);
+            }
+
+            const results = await response.json();
+            if (requestToken !== latestSearchRequest) {
+                return;
+            }
+
+            renderSearchResults(results);
+        } catch (error) {
+            if (requestToken !== latestSearchRequest) {
+                return;
+            }
+
+            console.error(error);
+            renderSearchMessage(SEARCH_ERROR_MESSAGE);
+        }
+    };
+
+    const scheduleSearch = (query, { immediate = false } = {}) => {
+        const trimmed = (query || '').trim();
+        window.clearTimeout(searchDebounceTimer);
+
+        if (!trimmed) {
+            latestSearchRequest += 1;
+            showHierarchyView();
+            return;
+        }
+
+        const runSearch = () => {
+            executeSearch(trimmed);
+        };
+
+        if (immediate) {
+            runSearch();
+        } else {
+            searchDebounceTimer = window.setTimeout(runSearch, SEARCH_DEBOUNCE_MS);
+        }
+    };
+
+    const refreshSearchResultsIfNeeded = () => {
+        if (!isSearchActive) {
+            return;
+        }
+
+        const query = searchInput.value.trim();
+        if (!query) {
+            showHierarchyView();
+            return;
+        }
+
+        scheduleSearch(query, { immediate: true });
+    };
+
+    const getFirstPromptButton = () => {
+        if (isSearchActive && !searchResultsContainer.hidden) {
+            return searchResultsContainer.querySelector('.prompt-button');
+        }
+        if (hierarchyContainer && !hierarchyContainer.hidden) {
+            return hierarchyContainer.querySelector('.prompt-button');
+        }
+        return navPanel.querySelector('.prompt-button');
     };
 
     const appendPromptToNav = (promptData) => {
@@ -182,7 +350,8 @@
         }
 
         const selectorValue = escapeSelector(String(subtopicId));
-        const subtopicSection = navPanel.querySelector(`.subtopic[data-subtopic-id="${selectorValue}"]`);
+        const context = hierarchyContainer || navPanel;
+        const subtopicSection = context.querySelector(`.subtopic[data-subtopic-id="${selectorValue}"]`);
         if (!subtopicSection) {
             return null;
         }
@@ -239,7 +408,8 @@
         }
 
         const selector = `.prompt-button[data-id="${escapeSelector(String(promptId))}"]`;
-        const button = navPanel.querySelector(selector);
+        const context = hierarchyContainer || navPanel;
+        const button = context.querySelector(selector);
         if (!button) {
             return { nextButton: null };
         }
@@ -430,6 +600,17 @@
         }, 220);
     };
 
+    searchInput.addEventListener('input', () => {
+        scheduleSearch(searchInput.value);
+    });
+
+    searchInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            scheduleSearch(searchInput.value, { immediate: true });
+        }
+    });
+
     navPanel.addEventListener('click', async (event) => {
         const trigger = event.target instanceof Element ? event.target.closest('.prompt-button') : null;
         if (!trigger) {
@@ -509,7 +690,7 @@
         appContainer.classList.remove('detail-view-active');
         resetCopyButtonLabel();
         disableDetailActions();
-        const firstPromptButton = navPanel.querySelector('.prompt-button');
+        const firstPromptButton = getFirstPromptButton();
         if (firstPromptButton) {
             firstPromptButton.focus({ preventScroll: true });
         }
@@ -574,7 +755,9 @@
                 resetPromptDetailPanel();
                 appContainer.classList.remove('detail-view-active');
 
-                const fallback = removal.nextButton || navPanel.querySelector('.prompt-button') || newPromptButton;
+                refreshSearchResultsIfNeeded();
+
+                const fallback = removal.nextButton || getFirstPromptButton() || newPromptButton;
                 window.setTimeout(() => {
                     if (fallback instanceof HTMLElement) {
                         fallback.focus({ preventScroll: true });
@@ -583,6 +766,7 @@
             } else if (response.status === 404) {
                 removePromptFromNav(promptId);
                 resetPromptDetailPanel();
+                refreshSearchResultsIfNeeded();
                 window.alert('Prompt not found. It may have already been deleted.');
             } else {
                 throw new Error(`Failed to delete prompt: ${response.status}`);
@@ -684,6 +868,7 @@
             if (!response.ok) {
                 if (isEdit && response.status === 404) {
                     showFormError('Prompt not found. It may have been deleted.');
+                    refreshSearchResultsIfNeeded();
                     return;
                 }
                 const errorMessage = responseBody && responseBody.errors
@@ -716,6 +901,8 @@
                 enableCopyButton(currentPromptMeta.content || '');
                 enableDetailActions();
 
+                refreshSearchResultsIfNeeded();
+
                 closePromptModal(false);
                 window.setTimeout(() => {
                     if (updatedButton instanceof HTMLElement) {
@@ -724,6 +911,7 @@
                 }, 260);
             } else {
                 const newButtonRef = appendPromptToNav(responseBody);
+                refreshSearchResultsIfNeeded();
                 closePromptModal(false);
                 window.setTimeout(() => {
                     if (newButtonRef instanceof HTMLElement) {
@@ -742,6 +930,8 @@
             }
         }
     });
+
+    renderSearchMessage(DEFAULT_SEARCH_MESSAGE);
 
     if (!promptTitle.textContent) {
         promptTitle.textContent = DEFAULT_PROMPT_TITLE;

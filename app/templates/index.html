@@ -22,42 +22,59 @@
                     </button>
                 </div>
             </header>
+            <div class="nav-search">
+                <label class="sr-only" for="prompt-search-input">Search prompts</label>
+                <input
+                    id="prompt-search-input"
+                    class="search-input"
+                    type="search"
+                    name="q"
+                    placeholder="Search prompts"
+                    autocomplete="off"
+                    data-role="search-input"
+                >
+            </div>
             <div class="nav-scroll">
-                {% for domain in structure %}
-                <article class="domain" data-domain-id="{{ domain.id }}" data-domain-name="{{ domain.name }}">
-                    <h2 class="domain-name">{{ domain.name }}</h2>
-                    <div class="subtopics">
-                        {% for subtopic in domain.subtopics %}
-                        <section class="subtopic" data-subtopic-id="{{ subtopic.id }}" data-subtopic-name="{{ subtopic.name }}">
-                            <h3 class="subtopic-name">{{ subtopic.name }}</h3>
-                            <ul class="prompt-list" aria-label="Prompts for {{ subtopic.name }}">
-                                {% for prompt in subtopic.prompts %}
-                                <li class="prompt-list-item">
-                                    <button
-                                        class="prompt-button"
-                                        type="button"
-                                        data-id="{{ prompt.id }}"
-                                        data-domain="{{ domain.name }}"
-                                        data-domain-id="{{ domain.id }}"
-                                        data-subtopic="{{ subtopic.name }}"
-                                        data-subtopic-id="{{ subtopic.id }}"
-                                    >
-                                        {{ prompt.title }}
-                                    </button>
-                                </li>
-                                {% else %}
-                                <li class="empty-state" data-role="empty-prompts">No prompts yet.</li>
-                                {% endfor %}
-                            </ul>
-                        </section>
-                        {% else %}
-                        <p class="empty-state">No subtopics yet.</p>
-                        {% endfor %}
-                    </div>
-                </article>
-                {% else %}
-                <p class="empty-state">Seed the database to view your prompt hierarchy.</p>
-                {% endfor %}
+                <div class="hierarchy-container" data-role="hierarchy-container">
+                    {% for domain in structure %}
+                    <article class="domain" data-domain-id="{{ domain.id }}" data-domain-name="{{ domain.name }}">
+                        <h2 class="domain-name">{{ domain.name }}</h2>
+                        <div class="subtopics">
+                            {% for subtopic in domain.subtopics %}
+                            <section class="subtopic" data-subtopic-id="{{ subtopic.id }}" data-subtopic-name="{{ subtopic.name }}">
+                                <h3 class="subtopic-name">{{ subtopic.name }}</h3>
+                                <ul class="prompt-list" aria-label="Prompts for {{ subtopic.name }}">
+                                    {% for prompt in subtopic.prompts %}
+                                    <li class="prompt-list-item">
+                                        <button
+                                            class="prompt-button"
+                                            type="button"
+                                            data-id="{{ prompt.id }}"
+                                            data-domain="{{ domain.name }}"
+                                            data-domain-id="{{ domain.id }}"
+                                            data-subtopic="{{ subtopic.name }}"
+                                            data-subtopic-id="{{ subtopic.id }}"
+                                        >
+                                            {{ prompt.title }}
+                                        </button>
+                                    </li>
+                                    {% else %}
+                                    <li class="empty-state" data-role="empty-prompts">No prompts yet.</li>
+                                    {% endfor %}
+                                </ul>
+                            </section>
+                            {% else %}
+                            <p class="empty-state">No subtopics yet.</p>
+                            {% endfor %}
+                        </div>
+                    </article>
+                    {% else %}
+                    <p class="empty-state">Seed the database to view your prompt hierarchy.</p>
+                    {% endfor %}
+                </div>
+                <div class="search-results" data-role="search-results" hidden>
+                    <p class="empty-state" data-role="search-empty-state">Type to search your prompts.</p>
+                </div>
             </div>
         </section>
         <section id="prompt-detail-panel">
