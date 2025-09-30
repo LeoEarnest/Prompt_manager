@@ -1,4 +1,4 @@
-"""Tests covering the API endpoints for prompt retrieval."""
+﻿"""Tests covering the API endpoints for prompt retrieval."""
 import pytest
 
 from app import create_app, db
@@ -80,3 +80,70 @@ def test_prompt_detail_returns_prompt_and_handles_missing(app, client):
     missing_response = client.get(f'/api/prompts/{prompt_id + 1000}')
     assert missing_response.status_code == 404
     assert missing_response.get_json() == {'error': 'Prompt not found'}
+
+
+def test_create_prompt_success(app, client):
+    """Posting valid data should persist a prompt and return details."""
+
+    with app.app_context():
+        domain = Domain(name='Research')
+        subtopic = Subtopic(name='AI Experiments', domain=domain)
+        db.session.add(domain)
+        db.session.commit()
+        subtopic_id = subtopic.id
+
+    payload = {
+        'title': 'Hypothesis generator',
+        'content': 'Draft three hypotheses for the study.',
+        'subtopic_id': subtopic_id,
+    }
+
+    response = client.post('/api/prompts', json=payload)
+    assert response.status_code == 201
+
+    data = response.get_json()
+    assert data['title'] == payload['title']
+    assert data['content'] == payload['content']
+    assert data['subtopic_id'] == subtopic_id
+    assert data['subtopic_name'] == 'AI Experiments'
+    assert data['domain_name'] == 'Research'
+    assert isinstance(data['id'], int)
+
+    with app.app_context():
+        stored = db.session.get(Prompt, data['id'])
+        assert stored is not None
+        assert stored.title == payload['title']
+        assert stored.content == payload['content']
+        assert stored.subtopic_id == subtopic_id
+
+
+def test_create_prompt_validation_errors(app, client):
+    """Invalid payloads should produce helpful error messages."""
+
+    with app.app_context():
+        domain = Domain(name='Productivity')
+        subtopic = Subtopic(name='Daily Habits', domain=domain)
+        db.session.add(domain)
+        db.session.commit()
+        subtopic_id = subtopic.id
+
+    missing_title = client.post(
+        '/api/prompts',
+        json={'content': 'Example content', 'subtopic_id': subtopic_id},
+    )
+    assert missing_title.status_code == 400
+    assert 'title' in missing_title.get_json()['errors']
+
+    invalid_subtopic = client.post(
+        '/api/prompts',
+        json={'title': 'New idea', 'content': 'Example content', 'subtopic_id': subtopic_id + 999},
+    )
+    assert invalid_subtopic.status_code == 400
+    assert invalid_subtopic.get_json()['errors']['subtopic_id'] == 'Subtopic not found.'
+
+    non_numeric_subtopic = client.post(
+        '/api/prompts',
+        json={'title': 'Another idea', 'content': 'More detail', 'subtopic_id': 'abc'},
+    )
+    assert non_numeric_subtopic.status_code == 400
+    assert non_numeric_subtopic.get_json()['errors']['subtopic_id'] == 'Valid subtopic_id is required.'

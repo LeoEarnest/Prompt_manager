@@ -1,5 +1,5 @@
 """HTTP routes for the prompt manager."""
-from flask import Blueprint, Response, jsonify, render_template
+from flask import Blueprint, Response, jsonify, render_template, request
 from sqlalchemy.orm import selectinload
 
 from . import db
@@ -63,6 +63,29 @@ def structure() -> Response:
     return jsonify(payload)
 
 
+@api_bp.route('/subtopics')
+def list_subtopics() -> Response:
+    """Return all subtopics with their related domain metadata."""
+
+    subtopics = Subtopic.query.options(
+        selectinload(Subtopic.domain)
+    ).order_by(Subtopic.name.asc()).all()
+
+    payload = [
+        {
+            'id': subtopic.id,
+            'name': subtopic.name,
+            'domain': {
+                'id': subtopic.domain.id,
+                'name': subtopic.domain.name,
+            },
+        }
+        for subtopic in subtopics
+    ]
+
+    return jsonify(payload)
+
+
 @api_bp.route('/prompts/<int:prompt_id>')
 def prompt_detail(prompt_id: int) -> Response:
     """Return a single prompt by its identifier."""
@@ -78,3 +101,50 @@ def prompt_detail(prompt_id: int) -> Response:
             'content': prompt.content,
         }
     )
+
+
+@api_bp.route('/prompts', methods=['POST'])
+def create_prompt() -> Response:
+    """Create a new prompt from JSON payload."""
+
+    payload = request.get_json(silent=True) or {}
+
+    title = (payload.get('title') or '').strip()
+    content = (payload.get('content') or '').strip()
+    subtopic_id_raw = payload.get('subtopic_id')
+
+    errors: dict[str, str] = {}
+
+    if not title:
+        errors['title'] = 'Title is required.'
+    if not content:
+        errors['content'] = 'Content is required.'
+
+    subtopic = None
+    try:
+        subtopic_id = int(subtopic_id_raw)
+    except (TypeError, ValueError):
+        errors['subtopic_id'] = 'Valid subtopic_id is required.'
+    else:
+        subtopic = db.session.get(Subtopic, subtopic_id)
+        if subtopic is None:
+            errors['subtopic_id'] = 'Subtopic not found.'
+
+    if errors:
+        return jsonify({'errors': errors}), 400
+
+    prompt = Prompt(title=title, content=content, subtopic=subtopic)
+    db.session.add(prompt)
+    db.session.commit()
+
+    response_payload = {
+        'id': prompt.id,
+        'title': prompt.title,
+        'content': prompt.content,
+        'subtopic_id': prompt.subtopic_id,
+        'subtopic_name': subtopic.name,
+        'domain_id': subtopic.domain_id,
+        'domain_name': subtopic.domain.name,
+    }
+
+    return jsonify(response_payload), 201

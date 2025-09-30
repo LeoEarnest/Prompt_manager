@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -12,14 +12,23 @@
             <header class="nav-header">
                 <p class="product-tagline">Focus Mode Prompt Library</p>
                 <h1 class="product-title">Prompt Manager</h1>
+                <div class="nav-actions">
+                    <button
+                        class="new-prompt-button"
+                        type="button"
+                        data-role="new-prompt-button"
+                    >
+                        New Prompt
+                    </button>
+                </div>
             </header>
             <div class="nav-scroll">
                 {% for domain in structure %}
-                <article class="domain">
+                <article class="domain" data-domain-id="{{ domain.id }}" data-domain-name="{{ domain.name }}">
                     <h2 class="domain-name">{{ domain.name }}</h2>
                     <div class="subtopics">
                         {% for subtopic in domain.subtopics %}
-                        <section class="subtopic">
+                        <section class="subtopic" data-subtopic-id="{{ subtopic.id }}" data-subtopic-name="{{ subtopic.name }}">
                             <h3 class="subtopic-name">{{ subtopic.name }}</h3>
                             <ul class="prompt-list" aria-label="Prompts for {{ subtopic.name }}">
                                 {% for prompt in subtopic.prompts %}
@@ -35,7 +44,7 @@
                                     </button>
                                 </li>
                                 {% else %}
-                                <li class="empty-state">No prompts yet.</li>
+                                <li class="empty-state" data-role="empty-prompts">No prompts yet.</li>
                                 {% endfor %}
                             </ul>
                         </section>
@@ -58,7 +67,7 @@
                         data-role="back-button"
                         aria-label="Back to prompt list"
                     >
-                        <span aria-hidden="true">←</span>
+                        <span aria-hidden="true">&larr;</span>
                         Back
                     </button>
                     <nav class="breadcrumb" aria-label="Prompt breadcrumb">
@@ -91,6 +100,73 @@
             </article>
         </section>
     </div>
+
+    <div class="modal-backdrop" data-role="modal-backdrop" hidden></div>
+    <section
+        class="modal"
+        data-role="new-prompt-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-prompt-title"
+        aria-hidden="true"
+        hidden
+    >
+        <div class="modal-content">
+            <header class="modal-header">
+                <h2 id="new-prompt-title">Create New Prompt</h2>
+                <button
+                    class="modal-close"
+                    type="button"
+                    data-role="modal-close-button"
+                    aria-label="Close create prompt form"
+                >
+                    &times;
+                </button>
+            </header>
+            <form class="modal-form" data-role="new-prompt-form">
+                <div class="form-field">
+                    <label class="form-label" for="new-prompt-subtopic">Subtopic</label>
+                    <select
+                        class="form-control"
+                        id="new-prompt-subtopic"
+                        name="subtopic_id"
+                        required
+                        data-role="subtopic-select"
+                    >
+                        <option value="">Select a subtopic</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label" for="new-prompt-title-input">Title</label>
+                    <input
+                        class="form-control"
+                        id="new-prompt-title-input"
+                        name="title"
+                        type="text"
+                        maxlength="256"
+                        required
+                    >
+                </div>
+                <div class="form-field">
+                    <label class="form-label" for="new-prompt-content">Content</label>
+                    <textarea
+                        class="form-control"
+                        id="new-prompt-content"
+                        name="content"
+                        rows="8"
+                        required
+                    ></textarea>
+                </div>
+                <p class="form-error" data-role="form-error" hidden></p>
+                <div class="form-actions">
+                    <button class="primary-button" type="submit" data-role="form-submit-button">Save Prompt</button>
+                    <button class="secondary-button" type="button" data-role="form-cancel-button">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </section>
+
     <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
 </body>
 </html>
+
