@@ -10,15 +10,8 @@ frontend_bp = Blueprint('frontend', __name__)
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 
-@frontend_bp.route('/')
-def index() -> str:
-    """Render the start page of the prompt manager."""
-    return render_template('index.html')
-
-
-@api_bp.route('/structure')
-def structure() -> Response:
-    """Return the full domain/subtopic/prompt hierarchy for quick navigation."""
+def _build_structure_payload() -> list[dict[str, object]]:
+    """Return the navigation hierarchy for domains, subtopics, and prompts."""
 
     domains = Domain.query.options(
         selectinload(Domain.subtopics).selectinload(Subtopic.prompts)
@@ -51,6 +44,22 @@ def structure() -> Response:
             }
         )
 
+    return payload
+
+
+@frontend_bp.route('/')
+def index() -> str:
+    """Render the start page of the prompt manager."""
+
+    structure = _build_structure_payload()
+    return render_template('index.html', structure=structure)
+
+
+@api_bp.route('/structure')
+def structure() -> Response:
+    """Return the full domain/subtopic/prompt hierarchy for quick navigation."""
+
+    payload = _build_structure_payload()
     return jsonify(payload)
 
 
