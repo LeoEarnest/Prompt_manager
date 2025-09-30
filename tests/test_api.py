@@ -147,3 +147,102 @@ def test_create_prompt_validation_errors(app, client):
     )
     assert non_numeric_subtopic.status_code == 400
     assert non_numeric_subtopic.get_json()['errors']['subtopic_id'] == 'Valid subtopic_id is required.'
+
+
+def test_update_prompt_success(app, client):
+    """Updating an existing prompt should persist changes and return metadata."""
+
+    with app.app_context():
+        domain = Domain(name='Writing Lab')
+        brainstorming = Subtopic(name='Brainstorming', domain=domain)
+        revision = Subtopic(name='Revision', domain=domain)
+        prompt = Prompt(
+            title='Original title',
+            content='Original content',
+            subtopic=brainstorming,
+        )
+        db.session.add_all([domain, prompt])
+        db.session.commit()
+
+        prompt_id = prompt.id
+        revision_id = revision.id
+
+    payload = {
+        'title': 'Updated title',
+        'content': 'Updated content body',
+        'subtopic_id': revision_id,
+    }
+
+    response = client.put(f'/api/prompts/{prompt_id}', json=payload)
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data['id'] == prompt_id
+    assert data['title'] == payload['title']
+    assert data['content'] == payload['content']
+    assert data['subtopic_id'] == revision_id
+    assert data['subtopic_name'] == 'Revision'
+    assert data['domain_name'] == 'Writing Lab'
+
+    with app.app_context():
+        stored = db.session.get(Prompt, prompt_id)
+        assert stored is not None
+        assert stored.title == payload['title']
+        assert stored.content == payload['content']
+        assert stored.subtopic_id == revision_id
+
+
+def test_update_prompt_validation_and_missing(app, client):
+    """Update routes should guard against invalid payloads and missing prompts."""
+
+    with app.app_context():
+        domain = Domain(name='Coaching')
+        tactics = Subtopic(name='Tactics', domain=domain)
+        prompt = Prompt(title='Gameplan', content='Initial draft', subtopic=tactics)
+        db.session.add_all([domain, prompt])
+        db.session.commit()
+
+        prompt_id = prompt.id
+        subtopic_id = tactics.id
+
+    missing_payload = client.put(
+        f'/api/prompts/{prompt_id}',
+        json={'title': '', 'content': '', 'subtopic_id': subtopic_id},
+    )
+    assert missing_payload.status_code == 400
+    errors = missing_payload.get_json()['errors']
+    assert 'title' in errors and 'content' in errors
+
+    missing_prompt = client.put(
+        f'/api/prompts/{prompt_id + 999}',
+        json={'title': 'New', 'content': 'Body', 'subtopic_id': subtopic_id},
+    )
+    assert missing_prompt.status_code == 404
+    assert missing_prompt.get_json()['error'] == 'Prompt not found'
+
+
+def test_delete_prompt_success_and_missing(app, client):
+    """Deleting a prompt should remove it and handle missing ids."""
+
+    with app.app_context():
+        domain = Domain(name='Strategy')
+        planning = Subtopic(name='Planning', domain=domain)
+        prompt = Prompt(title='Plan sprint', content='Outline the next sprint goals.', subtopic=planning)
+        db.session.add_all([domain, prompt])
+        db.session.commit()
+
+        prompt_id = prompt.id
+
+    response = client.delete(f'/api/prompts/{prompt_id}')
+    assert response.status_code == 204
+    assert response.get_data() == b''
+
+    with app.app_context():
+        assert db.session.get(Prompt, prompt_id) is None
+
+    missing_response = client.get(f'/api/prompts/{prompt_id}')
+    assert missing_response.status_code == 404
+
+    delete_missing = client.delete(f'/api/prompts/{prompt_id}')
+    assert delete_missing.status_code == 404
+    assert delete_missing.get_json()['error'] == 'Prompt not found'

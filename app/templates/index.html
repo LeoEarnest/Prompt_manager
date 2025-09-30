@@ -38,7 +38,9 @@
                                         type="button"
                                         data-id="{{ prompt.id }}"
                                         data-domain="{{ domain.name }}"
+                                        data-domain-id="{{ domain.id }}"
                                         data-subtopic="{{ subtopic.name }}"
+                                        data-subtopic-id="{{ subtopic.id }}"
                                     >
                                         {{ prompt.title }}
                                     </button>
@@ -78,14 +80,32 @@
                 </div>
                 <div class="detail-title-row">
                     <h2 class="detail-title" data-role="prompt-title">Select a prompt to preview</h2>
-                    <button
-                        class="copy-button"
-                        type="button"
-                        data-role="copy-button"
-                        disabled
-                    >
-                        Copy to Clipboard
-                    </button>
+                    <div class="detail-actions">
+                        <button
+                            class="copy-button"
+                            type="button"
+                            data-role="copy-button"
+                            disabled
+                        >
+                            Copy to Clipboard
+                        </button>
+                        <button
+                            class="edit-button"
+                            type="button"
+                            data-role="edit-button"
+                            disabled
+                        >
+                            Edit
+                        </button>
+                        <button
+                            class="delete-button"
+                            type="button"
+                            data-role="delete-button"
+                            disabled
+                        >
+                            Delete
+                        </button>
+                    </div>
                 </div>
             </header>
             <article class="prompt-detail">
@@ -113,7 +133,7 @@
     >
         <div class="modal-content">
             <header class="modal-header">
-                <h2 id="new-prompt-title">Create New Prompt</h2>
+                <h2 id="new-prompt-title" data-role="modal-title">Create New Prompt</h2>
                 <button
                     class="modal-close"
                     type="button"

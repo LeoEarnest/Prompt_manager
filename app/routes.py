@@ -55,6 +55,23 @@ def index() -> str:
     return render_template('index.html', structure=structure)
 
 
+def _serialize_prompt(prompt: Prompt) -> dict[str, object]:
+    """Return a JSON-safe representation of a prompt including hierarchy metadata."""
+
+    subtopic = prompt.subtopic
+    domain = subtopic.domain if subtopic is not None else None
+
+    return {
+        'id': prompt.id,
+        'title': prompt.title,
+        'content': prompt.content,
+        'subtopic_id': subtopic.id if subtopic is not None else None,
+        'subtopic_name': subtopic.name if subtopic is not None else None,
+        'domain_id': domain.id if domain is not None else None,
+        'domain_name': domain.name if domain is not None else None,
+    }
+
+
 @api_bp.route('/structure')
 def structure() -> Response:
     """Return the full domain/subtopic/prompt hierarchy for quick navigation."""
@@ -137,14 +154,62 @@ def create_prompt() -> Response:
     db.session.add(prompt)
     db.session.commit()
 
-    response_payload = {
-        'id': prompt.id,
-        'title': prompt.title,
-        'content': prompt.content,
-        'subtopic_id': prompt.subtopic_id,
-        'subtopic_name': subtopic.name,
-        'domain_id': subtopic.domain_id,
-        'domain_name': subtopic.domain.name,
-    }
+    return jsonify(_serialize_prompt(prompt)), 201
 
-    return jsonify(response_payload), 201
+
+@api_bp.route('/prompts/<int:prompt_id>', methods=['PUT'])
+def update_prompt(prompt_id: int) -> Response:
+    """Update an existing prompt with new details."""
+
+    prompt = db.session.get(Prompt, prompt_id)
+    if prompt is None:
+        return jsonify({'error': 'Prompt not found'}), 404
+
+    payload = request.get_json(silent=True) or {}
+
+    title = (payload.get('title') or '').strip()
+    content = (payload.get('content') or '').strip()
+    subtopic_id_raw = payload.get('subtopic_id')
+
+    errors: dict[str, str] = {}
+
+    if not title:
+        errors['title'] = 'Title is required.'
+    if not content:
+        errors['content'] = 'Content is required.'
+
+    subtopic = None
+    try:
+        subtopic_id = int(subtopic_id_raw)
+    except (TypeError, ValueError):
+        errors['subtopic_id'] = 'Valid subtopic_id is required.'
+    else:
+        subtopic = db.session.get(Subtopic, subtopic_id)
+        if subtopic is None:
+            errors['subtopic_id'] = 'Subtopic not found.'
+
+    if errors:
+        return jsonify({'errors': errors}), 400
+
+    prompt.title = title
+    prompt.content = content
+    prompt.subtopic = subtopic
+    db.session.commit()
+
+    db.session.refresh(prompt)
+
+    return jsonify(_serialize_prompt(prompt))
+
+
+@api_bp.route('/prompts/<int:prompt_id>', methods=['DELETE'])
+def delete_prompt(prompt_id: int) -> Response:
+    """Delete an existing prompt by identifier."""
+
+    prompt = db.session.get(Prompt, prompt_id)
+    if prompt is None:
+        return jsonify({'error': 'Prompt not found'}), 404
+
+    db.session.delete(prompt)
+    db.session.commit()
+
+    return Response(status=204)
