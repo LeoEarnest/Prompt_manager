@@ -315,3 +315,14 @@ def test_search_endpoint_returns_empty_for_no_matches(app, client):
     response = client.get('/api/search', query_string={'q': 'prototype'})
     assert response.status_code == 200
     assert response.get_json() == []
+
+
+def test_api_unknown_route_returns_json_error(client):
+    """Requesting an undefined API route should yield a JSON error payload."""
+
+    response = client.get('/api/does-not-exist')
+    assert response.status_code == 404
+    assert response.mimetype == 'application/json'
+    payload = response.get_json()
+    assert isinstance(payload, dict)
+    assert 'error' in payload and payload['error']

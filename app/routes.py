@@ -1,7 +1,8 @@
 """HTTP routes for the prompt manager."""
-from flask import Blueprint, Response, jsonify, render_template, request
+from flask import Blueprint, Response, current_app, jsonify, render_template, request
 from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
+from werkzeug.exceptions import HTTPException
 
 from . import db
 from .models import Domain, Prompt, Subtopic
@@ -9,6 +10,23 @@ from .models import Domain, Prompt, Subtopic
 
 frontend_bp = Blueprint('frontend', __name__)
 api_bp = Blueprint('api', __name__, url_prefix='/api')
+
+
+@api_bp.errorhandler(HTTPException)
+def handle_api_http_exception(error: HTTPException) -> Response:
+    """Return JSON payloads for known HTTP errors raised within the API."""
+
+    response = jsonify({'error': (error.description or 'Request failed')})
+    response.status_code = error.code or 500
+    return response
+
+
+@api_bp.errorhandler(Exception)
+def handle_api_exception(error: Exception) -> Response:
+    """Return a safe error response for unexpected API failures."""
+
+    current_app.logger.exception('Unhandled API error', exc_info=error)
+    return jsonify({'error': 'Internal server error'}), 500
 
 
 def _build_structure_payload() -> list[dict[str, object]]:
