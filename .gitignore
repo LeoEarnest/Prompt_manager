@@ -34,3 +34,5 @@ instance/
 .DS_Store
 Thumbs.db
 
+# Backups
+backup_db/
