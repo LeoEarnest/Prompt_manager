@@ -18,6 +18,8 @@ A lightweight prompt library built with Flask for prompt engineers who value spe
 - Pytest for automated testing
 - Gunicorn for production-serving the WSGI app
 
+如需更深入的技术架构、API 设计和数据模型说明，请参阅 [PROJECT_TECH.md](PROJECT_TECH.md)。
+
 ## Getting Started
 
 ### 1. Clone & Create a Virtual Environment
