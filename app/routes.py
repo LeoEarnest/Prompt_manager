@@ -246,13 +246,28 @@ def update_prompt(prompt_id: int) -> Response:
 
 @api_bp.route('/prompts/<int:prompt_id>', methods=['DELETE'])
 def delete_prompt(prompt_id: int) -> Response:
-    """Delete an existing prompt by identifier."""
+    """Delete an existing prompt and any resulting empty parent containers."""
 
     prompt = db.session.get(Prompt, prompt_id)
     if prompt is None:
         return jsonify({'error': 'Prompt not found'}), 404
 
+    # Keep track of parents before deleting the prompt
+    subtopic = prompt.subtopic
+    domain = subtopic.domain if subtopic else None
+
     db.session.delete(prompt)
+    db.session.flush()  # Use flush to check counts before committing
+
+    # Check if the subtopic is now empty
+    if subtopic and not subtopic.prompts:
+        db.session.delete(subtopic)
+        db.session.flush()  # Use flush to check counts before committing
+
+        # If subtopic was deleted, check if the domain is now empty
+        if domain and not domain.subtopics:
+            db.session.delete(domain)
+
     db.session.commit()
 
     return Response(status=204)

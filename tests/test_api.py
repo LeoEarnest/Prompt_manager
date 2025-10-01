@@ -430,3 +430,45 @@ def test_update_prompt_creates_new_classification(app, client):
         assert updated_prompt is not None
         assert updated_prompt.subtopic.name == 'Subtopic B'
         assert updated_prompt.subtopic.domain.name == 'Domain B'
+
+def test_delete_prompt_also_deletes_empty_parents(app, client):
+    """Deleting the last prompt in a hierarchy should prune empty parents."""
+
+    with app.app_context():
+        domain = Domain(name='Pruning Test Domain')
+        subtopic = Subtopic(name='Pruning Test Subtopic', domain=domain)
+        prompt1 = Prompt(title='Prompt 1', content='...', subtopic=subtopic)
+        prompt2 = Prompt(title='Prompt 2', content='...', subtopic=subtopic)
+        db.session.add_all([domain, subtopic, prompt1, prompt2])
+        db.session.commit()
+
+        prompt1_id = prompt1.id
+        prompt2_id = prompt2.id
+        subtopic_id = subtopic.id
+        domain_id = domain.id
+
+        assert Domain.query.count() == 1
+        assert Subtopic.query.count() == 1
+        assert Prompt.query.count() == 2
+
+    # Delete the first prompt, parents should remain
+    res1 = client.delete(f'/api/prompts/{prompt1_id}')
+    assert res1.status_code == 204
+
+    with app.app_context():
+        assert db.session.get(Domain, domain_id) is not None
+        assert db.session.get(Subtopic, subtopic_id) is not None
+        assert db.session.get(Prompt, prompt1_id) is None
+        assert Prompt.query.count() == 1
+
+    # Delete the second and last prompt, parents should be pruned
+    res2 = client.delete(f'/api/prompts/{prompt2_id}')
+    assert res2.status_code == 204
+
+    with app.app_context():
+        assert db.session.get(Domain, domain_id) is None
+        assert db.session.get(Subtopic, subtopic_id) is None
+        assert db.session.get(Prompt, prompt2_id) is None
+        assert Domain.query.count() == 0
+        assert Subtopic.query.count() == 0
+        assert Prompt.query.count() == 0
