@@ -457,6 +457,8 @@ body.modal-open {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
 }
 
 .modal-header {
