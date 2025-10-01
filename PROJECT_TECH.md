@@ -68,6 +68,15 @@ prompt_manager/
   ```
   在脚本内调用 `create_app()` 并在应用上下文中执行事务。
 
+## 数据库备份
+项目包含一个用于创建数据库时间点快照的备份脚本。
+
+- **核心脚本**: `backup.py`
+- **执行方式**: 在 Windows 环境下，直接运行 `run_backup.bat`。在其他环境或手动执行时，运行 `python backup.py`。
+- **备份源**: 脚本会备份位于项目根目录的 `prompt_manager.db` 文件。
+- **备份目标**: 备份文件存储在 `backup_db/` 目录下。
+- **命名格式**: 备份文件以 `YYYY-MM-DD_HH_MM_SS_prompt_manager.db` 的格式命名，确保每个备份都是唯一的。
+
 ## 测试策略 (`tests/`)
 - `tests/test_models.py`：验证 ORM 关系与唯一性约束，确保级联与数据完整性。
 - `tests/test_api.py`：覆盖结构、详情、创建、更新、删除、搜索等核心 API 行为与错误分支。
