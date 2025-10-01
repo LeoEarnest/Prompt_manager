@@ -11,7 +11,7 @@ A lightweight prompt library built with Flask for prompt engineers who value spe
 - Seed script for quickly populating a development database.
 
 ## Tech Stack
-- Python 3.10+
+- Python 3.12+
 - Flask with the application factory pattern
 - Flask-SQLAlchemy & SQLite (default) or any SQLAlchemy-supported database
 - Vanilla JavaScript, HTML5, and CSS3
@@ -82,8 +82,11 @@ prompt_manager/
 │   │   ├── css/
 │   │   └── js/
 │   └── templates/
+├── backup_db/             # Stores database backups
 ├── config.py              # Configuration classes and defaults
 ├── run.py                 # Dev server entry point
+├── run_backup.bat         # Backup execution script (Windows)
+├── backup.py              # Core database backup logic
 ├── seed.py                # Database seeding script
 ├── tests/                 # Pytest suites
 ├── requirements.txt       # Locked dependencies including gunicorn
