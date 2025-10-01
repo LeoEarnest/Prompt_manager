@@ -168,12 +168,12 @@ def test_update_prompt_success(app, client):
         db.session.commit()
 
         prompt_id = prompt.id
-        revision_id = revision.id
 
     payload = {
         'title': 'Updated title',
         'content': 'Updated content body',
-        'subtopic_id': revision_id,
+        'domain_name': 'Writing Lab',
+        'subtopic_name': 'Revision',
     }
 
     response = client.put(f'/api/prompts/{prompt_id}', json=payload)
@@ -183,16 +183,20 @@ def test_update_prompt_success(app, client):
     assert data['id'] == prompt_id
     assert data['title'] == payload['title']
     assert data['content'] == payload['content']
-    assert data['subtopic_id'] == revision_id
-    assert data['subtopic_name'] == 'Revision'
-    assert data['domain_name'] == 'Writing Lab'
+    assert data['subtopic_name'] == payload['subtopic_name']
+    assert data['domain_name'] == payload['domain_name']
+    assert isinstance(data['subtopic_id'], int)
+    assert isinstance(data['domain_id'], int)
 
     with app.app_context():
         stored = db.session.get(Prompt, prompt_id)
         assert stored is not None
         assert stored.title == payload['title']
         assert stored.content == payload['content']
-        assert stored.subtopic_id == revision_id
+        subtopic = db.session.get(Subtopic, stored.subtopic_id)
+        assert subtopic is not None
+        assert subtopic.name == payload['subtopic_name']
+        assert subtopic.domain.name == payload['domain_name']
 
 
 def test_update_prompt_validation_and_missing(app, client):
@@ -206,11 +210,15 @@ def test_update_prompt_validation_and_missing(app, client):
         db.session.commit()
 
         prompt_id = prompt.id
-        subtopic_id = tactics.id
 
     missing_payload = client.put(
         f'/api/prompts/{prompt_id}',
-        json={'title': '', 'content': '', 'subtopic_id': subtopic_id},
+        json={
+            'title': '',
+            'content': '',
+            'domain_name': 'Coaching',
+            'subtopic_name': 'Tactics',
+        },
     )
     assert missing_payload.status_code == 400
     errors = missing_payload.get_json()['errors']
@@ -218,10 +226,37 @@ def test_update_prompt_validation_and_missing(app, client):
 
     missing_prompt = client.put(
         f'/api/prompts/{prompt_id + 999}',
-        json={'title': 'New', 'content': 'Body', 'subtopic_id': subtopic_id},
+        json={
+            'title': 'New',
+            'content': 'Body',
+            'domain_name': 'Coaching',
+            'subtopic_name': 'Tactics',
+        },
     )
     assert missing_prompt.status_code == 404
     assert missing_prompt.get_json()['error'] == 'Prompt not found'
+
+    missing_domain = client.put(
+        f'/api/prompts/{prompt_id}',
+        json={
+            'title': 'Updated',
+            'content': 'Body',
+            'subtopic_name': 'Tactics',
+        },
+    )
+    assert missing_domain.status_code == 400
+    assert missing_domain.get_json()['errors']['domain_name'] == 'Domain name is required.'
+
+    missing_subtopic = client.put(
+        f'/api/prompts/{prompt_id}',
+        json={
+            'title': 'Updated',
+            'content': 'Body',
+            'domain_name': 'Coaching',
+        },
+    )
+    assert missing_subtopic.status_code == 400
+    assert missing_subtopic.get_json()['errors']['subtopic_name'] == 'Subtopic name is required.'
 
 
 def test_delete_prompt_success_and_missing(app, client):
@@ -329,3 +364,69 @@ def test_api_unknown_route_returns_json_error(client):
     payload = response.get_json()
     assert isinstance(payload, dict)
     assert 'error' in payload and payload['error']
+
+
+def test_create_prompt_reuses_and_is_case_insensitive(app, client):
+    """Posting a prompt with existing names should reuse domain/subtopic."""
+
+    with app.app_context():
+        domain = Domain(name='General')
+        subtopic = Subtopic(name='Notes', domain=domain)
+        db.session.add_all([domain, subtopic])
+        db.session.commit()
+
+        assert Domain.query.count() == 1
+        assert Subtopic.query.count() == 1
+
+    payload = {
+        'title': 'A new note',
+        'content': 'Content for the note.',
+        'domain_name': 'general',  # Lowercase
+        'subtopic_name': 'notes',  # Lowercase
+    }
+
+    response = client.post('/api/prompts', json=payload)
+    assert response.status_code == 201
+
+    with app.app_context():
+        assert Domain.query.count() == 1
+        assert Subtopic.query.count() == 1
+
+        created_prompt = Prompt.query.filter_by(title=payload['title']).first()
+        assert created_prompt is not None
+        assert created_prompt.subtopic.name == 'Notes'
+        assert created_prompt.subtopic.domain.name == 'General'
+
+
+def test_update_prompt_creates_new_classification(app, client):
+    """Updating a prompt with a new domain/subtopic should create them."""
+
+    with app.app_context():
+        domain = Domain(name='Domain A')
+        subtopic = Subtopic(name='Subtopic A', domain=domain)
+        prompt = Prompt(title='Test', content='Test content', subtopic=subtopic)
+        db.session.add_all([domain, subtopic, prompt])
+        db.session.commit()
+
+        prompt_id = prompt.id
+        assert Domain.query.count() == 1
+        assert Subtopic.query.count() == 1
+
+    payload = {
+        'title': 'Updated Title',
+        'content': 'Updated content',
+        'domain_name': 'Domain B',  # New domain
+        'subtopic_name': 'Subtopic B',  # New subtopic
+    }
+
+    response = client.put(f'/api/prompts/{prompt_id}', json=payload)
+    assert response.status_code == 200
+
+    with app.app_context():
+        assert Domain.query.count() == 2
+        assert Subtopic.query.count() == 2
+
+        updated_prompt = db.session.get(Prompt, prompt_id)
+        assert updated_prompt is not None
+        assert updated_prompt.subtopic.name == 'Subtopic B'
+        assert updated_prompt.subtopic.domain.name == 'Domain B'

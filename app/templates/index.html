@@ -162,16 +162,30 @@
             </header>
             <form class="modal-form" data-role="new-prompt-form">
                 <div class="form-field">
+                    <label class="form-label" for="new-prompt-domain">Domain</label>
+                    <input
+                        class="form-control"
+                        id="new-prompt-domain"
+                        name="domain_name"
+                        type="text"
+                        required
+                        list="domain-list"
+                        data-role="domain-input"
+                    >
+                    <datalist id="domain-list" data-role="domain-datalist"></datalist>
+                </div>
+                <div class="form-field">
                     <label class="form-label" for="new-prompt-subtopic">Subtopic</label>
-                    <select
+                    <input
                         class="form-control"
                         id="new-prompt-subtopic"
-                        name="subtopic_id"
+                        name="subtopic_name"
+                        type="text"
                         required
-                        data-role="subtopic-select"
+                        list="subtopic-list"
+                        data-role="subtopic-input"
                     >
-                        <option value="">Select a subtopic</option>
-                    </select>
+                    <datalist id="subtopic-list" data-role="subtopic-datalist"></datalist>
                 </div>
                 <div class="form-field">
                     <label class="form-label" for="new-prompt-title-input">Title</label>

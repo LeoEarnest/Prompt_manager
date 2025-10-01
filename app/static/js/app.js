@@ -17,7 +17,10 @@
     const modalCloseButton = doc.querySelector('[data-role="modal-close-button"]');
     const modalTitle = doc.querySelector('[data-role="modal-title"]');
     const newPromptForm = doc.querySelector('[data-role="new-prompt-form"]');
-    const subtopicSelect = doc.querySelector('[data-role="subtopic-select"]');
+    const domainInput = doc.querySelector('[data-role="domain-input"]');
+    const subtopicInput = doc.querySelector('[data-role="subtopic-input"]');
+    const domainDatalist = doc.querySelector('[data-role="domain-datalist"]');
+    const subtopicDatalist = doc.querySelector('[data-role="subtopic-datalist"]');
     const formError = doc.querySelector('[data-role="form-error"]');
     const formCancelButton = doc.querySelector('[data-role="form-cancel-button"]');
     const formSubmitButton = doc.querySelector('[data-role="form-submit-button"]');
@@ -42,7 +45,10 @@
         !modalCloseButton ||
         !modalTitle ||
         !newPromptForm ||
-        !subtopicSelect ||
+        !domainInput ||
+        !subtopicInput ||
+        !domainDatalist ||
+        !subtopicDatalist ||
         !formError ||
         !formCancelButton ||
         !formSubmitButton ||
@@ -79,7 +85,7 @@
     let currentPromptText = '';
     let copyResetTimer = null;
     let latestRequestToken = 0;
-    let latestSubtopicRequest = 0;
+    let latestDatalistRequest = 0;
     let activeModalTrigger = null;
     let isSubmittingPrompt = false;
     let editingPromptId = null;
@@ -156,7 +162,14 @@
     const resetFormState = () => {
         newPromptForm.reset();
         hideFormError();
-        subtopicSelect.disabled = false;
+        if (domainInput) {
+            domainInput.disabled = false;
+            domainInput.value = '';
+        }
+        if (subtopicInput) {
+            subtopicInput.disabled = false;
+            subtopicInput.value = '';
+        }
         formSubmitButton.disabled = false;
         formSubmitButton.textContent = DEFAULT_SUBMIT_LABEL;
         modalTitle.textContent = DEFAULT_MODAL_TITLE;
@@ -445,59 +458,205 @@
         return { nextButton };
     };
 
-    const populateSubtopics = async (selectedSubtopicId = null) => {
-        latestSubtopicRequest += 1;
-        const requestToken = latestSubtopicRequest;
-
-        subtopicSelect.innerHTML = '<option value="">Select a subtopic</option>';
+    const populateDatalists = async () => {
+        latestDatalistRequest += 1;
+        const requestToken = latestDatalistRequest;
 
         try {
-            const response = await fetch('/api/subtopics');
+            const response = await fetch('/api/structure');
             if (!response.ok) {
-                throw new Error(`Failed to fetch subtopics: ${response.status}`);
+                throw new Error(`Failed to fetch structure: ${response.status}`);
             }
 
-            const items = await response.json();
-            if (requestToken !== latestSubtopicRequest) {
+            const structure = await response.json();
+            if (requestToken !== latestDatalistRequest) {
                 return { aborted: true };
             }
 
-            if (!Array.isArray(items) || items.length === 0) {
-                return { count: 0, selectedFound: false };
-            }
+            const domainNames = new Map();
+            const subtopicNames = new Map();
 
-            const expectedValue = selectedSubtopicId != null ? String(selectedSubtopicId) : null;
-            let selectedFound = false;
-
-            items.forEach((subtopic) => {
-                if (!subtopic || typeof subtopic !== 'object') {
+            const addName = (collection, value) => {
+                const trimmed = (value || '').trim();
+                if (!trimmed) {
                     return;
                 }
-                const option = doc.createElement('option');
-                option.value = String(subtopic.id);
-                const domainName = subtopic.domain && subtopic.domain.name ? subtopic.domain.name : 'Domain';
-                const name = subtopic.name || 'Subtopic';
-                option.textContent = `${domainName} - ${name}`;
-                option.dataset.domainId = subtopic.domain && subtopic.domain.id ? String(subtopic.domain.id) : '';
-                option.dataset.domainName = domainName;
-                option.dataset.subtopicName = name;
-                if (expectedValue !== null && option.value === expectedValue) {
-                    selectedFound = true;
+                const key = trimmed.toLowerCase();
+                if (!collection.has(key)) {
+                    collection.set(key, trimmed);
                 }
-                subtopicSelect.appendChild(option);
-            });
+            };
 
-            if (expectedValue !== null && selectedFound) {
-                subtopicSelect.value = expectedValue;
+            if (Array.isArray(structure)) {
+                structure.forEach((domainItem) => {
+                    if (!domainItem || typeof domainItem !== 'object') {
+                        return;
+                    }
+
+                    addName(domainNames, domainItem.name);
+
+                    if (Array.isArray(domainItem.subtopics)) {
+                        domainItem.subtopics.forEach((subtopicItem) => {
+                            if (!subtopicItem || typeof subtopicItem !== 'object') {
+                                return;
+                            }
+                            addName(subtopicNames, subtopicItem.name);
+                        });
+                    }
+                });
             }
 
-            return { count: items.length, selectedFound };
+            const sortNames = (values) =>
+                Array.from(values).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+            if (domainDatalist) {
+                domainDatalist.innerHTML = '';
+                sortNames(domainNames.values()).forEach((name) => {
+                    const option = doc.createElement('option');
+                    option.value = name;
+                    domainDatalist.appendChild(option);
+                });
+            }
+
+            if (subtopicDatalist) {
+                subtopicDatalist.innerHTML = '';
+                sortNames(subtopicNames.values()).forEach((name) => {
+                    const option = doc.createElement('option');
+                    option.value = name;
+                    subtopicDatalist.appendChild(option);
+                });
+            }
+
+            return {
+                domainCount: domainNames.size,
+                subtopicCount: subtopicNames.size,
+            };
         } catch (error) {
             console.error(error);
-            if (requestToken !== latestSubtopicRequest) {
+            if (requestToken !== latestDatalistRequest) {
                 return { aborted: true };
             }
             return { error: true };
+        }
+    };
+
+    const renderHierarchy = (structure) => {
+        if (!hierarchyContainer) {
+            return;
+        }
+        hierarchyContainer.innerHTML = '';
+
+        if (!Array.isArray(structure) || structure.length === 0) {
+            const emptyState = doc.createElement('p');
+            emptyState.className = 'empty-state';
+            emptyState.textContent = 'Seed the database to view your prompt hierarchy.';
+            hierarchyContainer.appendChild(emptyState);
+            return;
+        }
+
+        structure.forEach((domain) => {
+            const domainArticle = doc.createElement('article');
+            domainArticle.className = 'domain';
+            domainArticle.dataset.domainId = domain.id;
+            domainArticle.dataset.domainName = domain.name;
+
+            const domainH2 = doc.createElement('h2');
+            domainH2.className = 'domain-name';
+            domainH2.textContent = domain.name;
+            domainArticle.appendChild(domainH2);
+
+            const subtopicsDiv = doc.createElement('div');
+            subtopicsDiv.className = 'subtopics';
+
+            const sortedSubtopics =
+                domain.subtopics && domain.subtopics.length > 0
+                    ? [...domain.subtopics].sort((a, b) =>
+                          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+                      )
+                    : [];
+
+            if (sortedSubtopics.length > 0) {
+                sortedSubtopics.forEach((subtopic) => {
+                    const subtopicSection = doc.createElement('section');
+                    subtopicSection.className = 'subtopic';
+                    subtopicSection.dataset.subtopicId = subtopic.id;
+                    subtopicSection.dataset.subtopicName = subtopic.name;
+
+                    const subtopicH3 = doc.createElement('h3');
+                    subtopicH3.className = 'subtopic-name';
+                    subtopicH3.textContent = subtopic.name;
+                    subtopicSection.appendChild(subtopicH3);
+
+                    const promptListUl = doc.createElement('ul');
+                    promptListUl.className = 'prompt-list';
+                    promptListUl.setAttribute('aria-label', `Prompts for ${subtopic.name}`);
+
+                    const sortedPrompts =
+                        subtopic.prompts && subtopic.prompts.length > 0
+                            ? [...subtopic.prompts].sort((a, b) =>
+                                  a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+                              )
+                            : [];
+
+                    if (sortedPrompts.length > 0) {
+                        sortedPrompts.forEach((prompt) => {
+                            const promptLi = doc.createElement('li');
+                            promptLi.className = 'prompt-list-item';
+
+                            const promptButton = doc.createElement('button');
+                            promptButton.className = 'prompt-button';
+                            promptButton.type = 'button';
+                            promptButton.dataset.id = prompt.id;
+                            promptButton.dataset.domain = domain.name;
+                            promptButton.dataset.domainId = domain.id;
+                            promptButton.dataset.subtopic = subtopic.name;
+                            promptButton.dataset.subtopicId = subtopic.id;
+                            promptButton.textContent = prompt.title;
+
+                            promptLi.appendChild(promptButton);
+                            promptListUl.appendChild(promptLi);
+                        });
+                    } else {
+                        const emptyLi = doc.createElement('li');
+                        emptyLi.className = 'empty-state';
+                        emptyLi.dataset.role = 'empty-prompts';
+                        emptyLi.textContent = 'No prompts yet.';
+                        promptListUl.appendChild(emptyLi);
+                    }
+                    subtopicSection.appendChild(promptListUl);
+                    subtopicsDiv.appendChild(subtopicSection);
+                });
+            } else {
+                const emptyP = doc.createElement('p');
+                emptyP.className = 'empty-state';
+                emptyP.textContent = 'No subtopics yet.';
+                subtopicsDiv.appendChild(emptyP);
+            }
+            domainArticle.appendChild(subtopicsDiv);
+            hierarchyContainer.appendChild(domainArticle);
+        });
+    };
+
+    const refreshNavigationTree = async (focusPromptId = null) => {
+        try {
+            const response = await fetch('/api/structure');
+            if (!response.ok) {
+                throw new Error(`Failed to fetch structure: ${response.status}`);
+            }
+            const structure = await response.json();
+            renderHierarchy(structure);
+
+            if (focusPromptId) {
+                const selector = `.prompt-button[data-id="${escapeSelector(String(focusPromptId))}"]`;
+                const buttonToFocus = hierarchyContainer.querySelector(selector);
+                if (buttonToFocus) {
+                    return buttonToFocus;
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to refresh navigation tree:', error);
+            return null;
         }
     };
 
@@ -509,18 +668,29 @@
 
         hideFormError();
 
-        const desiredSubtopicId = isEdit && promptData ? promptData.subtopicId ?? null : null;
+        let initialDomain = '';
+        let initialSubtopic = '';
 
         if (isEdit && promptData) {
             newPromptForm.title.value = promptData.title || '';
             newPromptForm.content.value = promptData.content || '';
+            initialDomain = (promptData.domainName || '').trim();
+            initialSubtopic = (promptData.subtopicName || '').trim();
         } else {
             newPromptForm.reset();
         }
 
-        subtopicSelect.disabled = true;
+        if (domainInput) {
+            domainInput.value = initialDomain;
+            domainInput.disabled = true;
+        }
+        if (subtopicInput) {
+            subtopicInput.value = initialSubtopic;
+            subtopicInput.disabled = true;
+        }
         formSubmitButton.disabled = true;
         formSubmitButton.textContent = LOADING_SUBMIT_LABEL;
+        const submitLabel = isEdit ? 'Update Prompt' : DEFAULT_SUBMIT_LABEL;
         modalTitle.textContent = isEdit ? 'Edit Prompt' : DEFAULT_MODAL_TITLE;
 
         body.classList.add('modal-open');
@@ -533,47 +703,35 @@
             modal.classList.add('is-visible');
         });
 
-        const result = await populateSubtopics(desiredSubtopicId);
-        const submitLabel = isEdit ? 'Update Prompt' : DEFAULT_SUBMIT_LABEL;
+        const result = await populateDatalists();
 
         if (result && result.aborted) {
             formSubmitButton.textContent = submitLabel;
             return;
         }
 
-        if (result && result.error) {
-            showFormError('Unable to load subtopics. Please try again.');
-            subtopicSelect.disabled = true;
-            formSubmitButton.disabled = true;
-            formSubmitButton.textContent = submitLabel;
-            return;
+        if (domainInput) {
+            domainInput.disabled = false;
+            domainInput.value = initialDomain;
         }
-
-        if (!result || result.count === 0) {
-            showFormError('Add a subtopic before creating prompts.');
-            subtopicSelect.disabled = true;
-            formSubmitButton.disabled = true;
-            formSubmitButton.textContent = submitLabel;
-            return;
+        if (subtopicInput) {
+            subtopicInput.disabled = false;
+            subtopicInput.value = initialSubtopic;
         }
-
-        if (isEdit && desiredSubtopicId != null && !(result && result.selectedFound)) {
-            showFormError('Select a valid subtopic.');
-            subtopicSelect.disabled = true;
-            formSubmitButton.disabled = true;
-            formSubmitButton.textContent = submitLabel;
-            return;
-        }
-
-        subtopicSelect.disabled = false;
         formSubmitButton.disabled = false;
         formSubmitButton.textContent = submitLabel;
+
+        if (result && result.error) {
+            showFormError('Autocomplete suggestions are unavailable. Enter values manually.');
+        }
 
         window.setTimeout(() => {
             if (isEdit) {
                 newPromptForm.title.focus({ preventScroll: true });
+            } else if (domainInput) {
+                domainInput.focus({ preventScroll: true });
             } else {
-                subtopicSelect.focus({ preventScroll: true });
+                newPromptForm.title.focus({ preventScroll: true });
             }
         }, 120);
     };
@@ -729,6 +887,8 @@
                 content: currentPromptMeta.content,
                 subtopicId: currentPromptMeta.subtopicId,
                 domainId: currentPromptMeta.domainId,
+                domainName: currentPromptMeta.domainName,
+                subtopicName: currentPromptMeta.subtopicName,
             },
         });
     });
@@ -751,20 +911,19 @@
             });
 
             if (response.status === 204) {
-                const removal = removePromptFromNav(promptId);
                 resetPromptDetailPanel();
                 appContainer.classList.remove('detail-view-active');
 
+                const buttonToFocus = (await refreshNavigationTree()) || getFirstPromptButton() || newPromptButton;
                 refreshSearchResultsIfNeeded();
 
-                const fallback = removal.nextButton || getFirstPromptButton() || newPromptButton;
                 window.setTimeout(() => {
-                    if (fallback instanceof HTMLElement) {
-                        fallback.focus({ preventScroll: true });
+                    if (buttonToFocus instanceof HTMLElement) {
+                        buttonToFocus.focus({ preventScroll: true });
                     }
                 }, 120);
             } else if (response.status === 404) {
-                removePromptFromNav(promptId);
+                await refreshNavigationTree();
                 resetPromptDetailPanel();
                 refreshSearchResultsIfNeeded();
                 window.alert('Prompt not found. It may have already been deleted.');
@@ -810,15 +969,22 @@
             return;
         }
 
-        const subtopicIdValue = subtopicSelect.value.trim();
+        const domainValue = domainInput.value.trim();
+        const subtopicValue = subtopicInput.value.trim();
         const titleValue = newPromptForm.title.value.trim();
         const contentValue = newPromptForm.content.value.trim();
 
         hideFormError();
 
-        if (!subtopicIdValue) {
-            showFormError('Please choose a subtopic.');
-            subtopicSelect.focus({ preventScroll: true });
+        if (!domainValue) {
+            showFormError('Domain is required.');
+            domainInput.focus({ preventScroll: true });
+            return;
+        }
+
+        if (!subtopicValue) {
+            showFormError('Subtopic is required.');
+            subtopicInput.focus({ preventScroll: true });
             return;
         }
 
@@ -834,16 +1000,11 @@
             return;
         }
 
-        const subtopicId = Number(subtopicIdValue);
-        if (Number.isNaN(subtopicId)) {
-            showFormError('Select a valid subtopic.');
-            return;
-        }
-
         const payload = {
             title: titleValue,
             content: contentValue,
-            subtopic_id: subtopicId,
+            domain_name: domainValue,
+            subtopic_name: subtopicValue,
         };
 
         const isEdit = modalMode === MODAL_MODE.EDIT && typeof editingPromptId === 'number';
@@ -868,31 +1029,38 @@
             if (!response.ok) {
                 if (isEdit && response.status === 404) {
                     showFormError('Prompt not found. It may have been deleted.');
+                    await refreshNavigationTree();
                     refreshSearchResultsIfNeeded();
                     return;
                 }
-                const errorMessage = responseBody && responseBody.errors
-                    ? Object.values(responseBody.errors).join(' ')
-                    : 'Unable to save prompt. Please try again.';
+                const errorMessage =
+                    responseBody && responseBody.errors
+                        ? Object.values(responseBody.errors).join(' ')
+                        : 'Unable to save prompt. Please try again.';
                 showFormError(errorMessage || 'Unable to save prompt. Please try again.');
                 return;
             }
 
-            if (isEdit) {
-                removePromptFromNav(editingPromptId);
-                const updatedButton = appendPromptToNav(responseBody);
+            closePromptModal(false);
+            const buttonToFocus = await refreshNavigationTree(responseBody.id);
 
-                currentPromptId = responseBody.id;
+            if (isEdit && currentPromptId === responseBody.id) {
                 currentPromptMeta = {
                     id: responseBody.id,
                     title: responseBody.title || '',
                     content: responseBody.content || '',
-                    subtopicId: typeof responseBody.subtopic_id === 'number' ? responseBody.subtopic_id : Number(responseBody.subtopic_id),
+                    subtopicId:
+                        typeof responseBody.subtopic_id === 'number'
+                            ? responseBody.subtopic_id
+                            : Number(responseBody.subtopic_id),
                     subtopicName: responseBody.subtopic_name || 'Subtopic',
-                    domainId: typeof responseBody.domain_id === 'number' ? responseBody.domain_id : Number(responseBody.domain_id),
+                    domainId:
+                        typeof responseBody.domain_id === 'number'
+                            ? responseBody.domain_id
+                            : Number(responseBody.domain_id),
                     domainName: responseBody.domain_name || 'Domain',
                 };
-                currentPromptNavButton = updatedButton || null;
+                currentPromptNavButton = buttonToFocus || null;
 
                 breadcrumbDomain.textContent = currentPromptMeta.domainName;
                 breadcrumbSubtopic.textContent = currentPromptMeta.subtopicName;
@@ -900,25 +1068,15 @@
                 setPromptContent(currentPromptMeta.content || '');
                 enableCopyButton(currentPromptMeta.content || '');
                 enableDetailActions();
-
-                refreshSearchResultsIfNeeded();
-
-                closePromptModal(false);
-                window.setTimeout(() => {
-                    if (updatedButton instanceof HTMLElement) {
-                        updatedButton.focus({ preventScroll: true });
-                    }
-                }, 260);
-            } else {
-                const newButtonRef = appendPromptToNav(responseBody);
-                refreshSearchResultsIfNeeded();
-                closePromptModal(false);
-                window.setTimeout(() => {
-                    if (newButtonRef instanceof HTMLElement) {
-                        newButtonRef.focus({ preventScroll: true });
-                    }
-                }, 260);
             }
+
+            refreshSearchResultsIfNeeded();
+
+            window.setTimeout(() => {
+                if (buttonToFocus instanceof HTMLElement) {
+                    buttonToFocus.focus({ preventScroll: true });
+                }
+            }, 260);
         } catch (error) {
             console.error(error);
             showFormError('Unable to save prompt. Please try again.');
