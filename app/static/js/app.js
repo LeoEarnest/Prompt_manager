@@ -831,6 +831,8 @@
             setPromptContent(currentPromptMeta.content);
             enableCopyButton(currentPromptMeta.content);
             enableDetailActions();
+
+            window.scrollTo(0, 0);
         } catch (error) {
             if (requestToken !== latestRequestToken) {
                 return;
