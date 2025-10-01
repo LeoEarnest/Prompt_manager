@@ -1,5 +1,7 @@
 # Prompt Manager
 
+![Project Screenshot](assets/screenshot.png)
+
 A lightweight prompt library built with Flask for prompt engineers who value speed, keyboard-centric navigation, and a focused reading mode. The application organises prompts by domain and subtopic, delivers a responsive UI with instant search, and exposes a tested REST API for future integrations.
 
 ## Features
