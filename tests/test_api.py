@@ -85,17 +85,11 @@ def test_prompt_detail_returns_prompt_and_handles_missing(app, client):
 def test_create_prompt_success(app, client):
     """Posting valid data should persist a prompt and return details."""
 
-    with app.app_context():
-        domain = Domain(name='Research')
-        subtopic = Subtopic(name='AI Experiments', domain=domain)
-        db.session.add(domain)
-        db.session.commit()
-        subtopic_id = subtopic.id
-
     payload = {
         'title': 'Hypothesis generator',
         'content': 'Draft three hypotheses for the study.',
-        'subtopic_id': subtopic_id,
+        'domain_name': 'Research',
+        'subtopic_name': 'AI Experiments',
     }
 
     response = client.post('/api/prompts', json=payload)
@@ -104,9 +98,10 @@ def test_create_prompt_success(app, client):
     data = response.get_json()
     assert data['title'] == payload['title']
     assert data['content'] == payload['content']
-    assert data['subtopic_id'] == subtopic_id
-    assert data['subtopic_name'] == 'AI Experiments'
-    assert data['domain_name'] == 'Research'
+    assert data['subtopic_name'] == payload['subtopic_name']
+    assert data['domain_name'] == payload['domain_name']
+    assert isinstance(data['subtopic_id'], int)
+    assert isinstance(data['domain_id'], int)
     assert isinstance(data['id'], int)
 
     with app.app_context():
@@ -114,39 +109,47 @@ def test_create_prompt_success(app, client):
         assert stored is not None
         assert stored.title == payload['title']
         assert stored.content == payload['content']
-        assert stored.subtopic_id == subtopic_id
+        subtopic = db.session.get(Subtopic, stored.subtopic_id)
+        assert subtopic is not None
+        assert subtopic.name == payload['subtopic_name']
+        assert subtopic.domain.name == payload['domain_name']
 
 
 def test_create_prompt_validation_errors(app, client):
     """Invalid payloads should produce helpful error messages."""
 
-    with app.app_context():
-        domain = Domain(name='Productivity')
-        subtopic = Subtopic(name='Daily Habits', domain=domain)
-        db.session.add(domain)
-        db.session.commit()
-        subtopic_id = subtopic.id
-
     missing_title = client.post(
         '/api/prompts',
-        json={'content': 'Example content', 'subtopic_id': subtopic_id},
+        json={
+            'content': 'Example content',
+            'domain_name': 'Productivity',
+            'subtopic_name': 'Daily Habits',
+        },
     )
     assert missing_title.status_code == 400
     assert 'title' in missing_title.get_json()['errors']
 
-    invalid_subtopic = client.post(
+    missing_domain = client.post(
         '/api/prompts',
-        json={'title': 'New idea', 'content': 'Example content', 'subtopic_id': subtopic_id + 999},
+        json={
+            'title': 'New idea',
+            'content': 'Example content',
+            'subtopic_name': 'Daily Habits',
+        },
     )
-    assert invalid_subtopic.status_code == 400
-    assert invalid_subtopic.get_json()['errors']['subtopic_id'] == 'Subtopic not found.'
+    assert missing_domain.status_code == 400
+    assert missing_domain.get_json()['errors']['domain_name'] == 'Domain name is required.'
 
-    non_numeric_subtopic = client.post(
+    missing_subtopic = client.post(
         '/api/prompts',
-        json={'title': 'Another idea', 'content': 'More detail', 'subtopic_id': 'abc'},
+        json={
+            'title': 'Another idea',
+            'content': 'More detail',
+            'domain_name': 'Productivity',
+        },
     )
-    assert non_numeric_subtopic.status_code == 400
-    assert non_numeric_subtopic.get_json()['errors']['subtopic_id'] == 'Valid subtopic_id is required.'
+    assert missing_subtopic.status_code == 400
+    assert missing_subtopic.get_json()['errors']['subtopic_name'] == 'Subtopic name is required.'
 
 
 def test_update_prompt_success(app, client):

@@ -147,7 +147,8 @@ def create_prompt() -> Response:
 
     title = (payload.get('title') or '').strip()
     content = (payload.get('content') or '').strip()
-    subtopic_id_raw = payload.get('subtopic_id')
+    domain_name = (payload.get('domain_name') or '').strip()
+    subtopic_name = (payload.get('subtopic_name') or '').strip()
 
     errors: dict[str, str] = {}
 
@@ -155,19 +156,30 @@ def create_prompt() -> Response:
         errors['title'] = 'Title is required.'
     if not content:
         errors['content'] = 'Content is required.'
-
-    subtopic = None
-    try:
-        subtopic_id = int(subtopic_id_raw)
-    except (TypeError, ValueError):
-        errors['subtopic_id'] = 'Valid subtopic_id is required.'
-    else:
-        subtopic = db.session.get(Subtopic, subtopic_id)
-        if subtopic is None:
-            errors['subtopic_id'] = 'Subtopic not found.'
+    if not domain_name:
+        errors['domain_name'] = 'Domain name is required.'
+    if not subtopic_name:
+        errors['subtopic_name'] = 'Subtopic name is required.'
 
     if errors:
         return jsonify({'errors': errors}), 400
+
+    domain = Domain.query.filter(
+        func.lower(Domain.name) == domain_name.lower()
+    ).first()
+    if domain is None:
+        domain = Domain(name=domain_name)
+        db.session.add(domain)
+        db.session.flush()
+
+    subtopic = Subtopic.query.filter(
+        Subtopic.domain_id == domain.id,
+        func.lower(Subtopic.name) == subtopic_name.lower(),
+    ).first()
+    if subtopic is None:
+        subtopic = Subtopic(name=subtopic_name, domain=domain)
+        db.session.add(subtopic)
+        db.session.flush()
 
     prompt = Prompt(title=title, content=content, subtopic=subtopic)
     db.session.add(prompt)
