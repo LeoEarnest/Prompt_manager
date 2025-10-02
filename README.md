@@ -5,6 +5,7 @@
 A lightweight prompt library built with Flask for prompt engineers who value speed, keyboard-centric navigation, and a focused reading mode. The application organises prompts by domain and subtopic, delivers a responsive UI with instant search, and exposes a tested REST API for future integrations.
 
 ## Features
+- **Dynamic Prompt Builder:** Create template prompts with configurable options to generate numerous variations.
 - Domain → subtopic → prompt hierarchy fetched in a single API call.
 - Focus mode detail view with copy-to-clipboard, edit, and delete actions.
 - Create and manage prompts through an accessible modal workflow.
@@ -44,10 +45,16 @@ Set environment variables as needed before running the app:
 You can store these in a `.env` file and use a loader such as `python-dotenv`, or export them directly in your shell.
 
 ### 4. Initialise the Database
+
+First, apply any pending database migrations to set up or update the schema. This is the standard way to manage the database structure.
+```bash
+flask db upgrade
+```
+
+Optionally, to populate the database with sample data, run the seed script. **Warning:** This will delete all existing data.
 ```bash
 python seed.py
 ```
-The seed script drops existing tables, recreates them, and inserts sample domains, subtopics, and prompts.
 
 ### 5. Run the Development Server
 ```bash

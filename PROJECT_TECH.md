@@ -34,7 +34,7 @@ prompt_manager/
 | --- | --- | --- |
 | `Domain` | `id`, `name` (唯一) | 顶层主题；与 Subtopic 一对多，删除时级联清理下级实体。|
 | `Subtopic` | `id`, `name`, `domain_id` | 二级主题；与 Prompt 一对多，提供层级导航。|
-| `Prompt` | `id`, `title`, `content`, `subtopic_id` | 最终提示语实体，关联所属 Subtopic。|
+| `Prompt` | `id`, `title`, `content`, `subtopic_id`, `is_template`, `configurable_options` | 最终提示语实体。`is_template` 标记其为模板，`configurable_options` (JSON) 存储动态选项。|
 
 - 关系策略：`selectinload` 预加载层级，减少 N+1 查询。外键完整性保证数据一致。
 - `models.py` 使用类型注解与 `mapped_column` 强化可读性。
@@ -99,7 +99,7 @@ prompt_manager/
 
 ## 部署与运维要点
 - 使用环境变量 `DATABASE_URL` 切换至生产数据库（如 PostgreSQL）。
-- 建议通过 `Flask-Migrate`/Alembic 维护迁移流程（依赖已预置在 `requirements.txt`）。
+- 通过 `Flask-Migrate`/Alembic 维护数据库迁移。使用 `flask db upgrade` 更新结构。
 - 监控：依赖 Flask 日志记录 API 异常，可对接外部日志或 APM。
 - 静态资源轻量，可复用 CDN 或反向代理缓存。
 
