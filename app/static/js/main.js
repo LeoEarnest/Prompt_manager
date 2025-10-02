@@ -1,7 +1,7 @@
 import * as dom from './modules/dom.js';
 import * as api from './modules/api.js';
 import { MODAL_MODE, PROMPT_TYPE, DEFAULTS, setState, getStateValue } from './modules/state.js';
-import { openPromptModal, closePromptModal, handleFormSubmit } from './modules/modal.js';
+import { openPromptModal, closePromptModal, handleFormSubmit, updateSubtopicDatalist } from './modules/modal.js';
 import { scheduleSearch, refreshSearchResultsIfNeeded, initSearch } from './modules/search.js';
 import { setPromptType, createCategoryElement, renderTemplatePromptDetail } from './modules/template.js';
 import {
@@ -216,6 +216,11 @@ function initialize() {
     });
 
     dom.newPromptForm.addEventListener('submit', (e) => handleFormSubmit(e, handleSuccessfulUpdate));
+
+    dom.domainInput.addEventListener('input', () => {
+        dom.subtopicInput.value = '';
+        updateSubtopicDatalist(dom.domainInput.value);
+    });
 }
 
 document.addEventListener('DOMContentLoaded', initialize);

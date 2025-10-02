@@ -43,44 +43,55 @@ async function populateDatalists() {
         const structure = await api.getStructure();
         if (getStateValue('latestDatalistRequest') !== requestToken) return { aborted: true };
 
-        const domainNames = new Map();
-        const subtopicNames = new Map();
+        updateState('promptHierarchy', structure || []);
 
+        const domainNames = new Map();
         if (Array.isArray(structure)) {
             structure.forEach((domainItem) => {
                 if (!domainItem || typeof domainItem !== 'object') return;
                 const domainName = (domainItem.name || '').trim();
                 if (domainName) domainNames.set(domainName.toLowerCase(), domainName);
-
-                if (Array.isArray(domainItem.subtopics)) {
-                    domainItem.subtopics.forEach((subtopicItem) => {
-                        if (!subtopicItem || typeof subtopicItem !== 'object') return;
-                        const subtopicName = (subtopicItem.name || '').trim();
-                        if (subtopicName) subtopicNames.set(subtopicName.toLowerCase(), subtopicName);
-                    });
-                }
             });
         }
 
-        const renderDatalist = (datalist, names) => {
-            datalist.innerHTML = '';
-            const sorted = Array.from(names.values()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        if (dom.domainDatalist) {
+            dom.domainDatalist.innerHTML = '';
+            const sorted = Array.from(domainNames.values()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
             sorted.forEach((name) => {
                 const option = dom.doc.createElement('option');
                 option.value = name;
-                datalist.appendChild(option);
+                dom.domainDatalist.appendChild(option);
             });
-        };
+        }
 
-        if (dom.domainDatalist) renderDatalist(dom.domainDatalist, domainNames);
-        if (dom.subtopicDatalist) renderDatalist(dom.subtopicDatalist, subtopicNames);
-
-        return { domainCount: domainNames.size, subtopicCount: subtopicNames.size };
+        return { domainCount: domainNames.size };
     } catch (error) {
         console.error(error);
         if (getStateValue('latestDatalistRequest') !== requestToken) return { aborted: true };
         return { error: true };
     }
+}
+
+export function updateSubtopicDatalist(domainName) {
+    const hierarchy = getStateValue('promptHierarchy');
+    const subtopicDatalist = dom.subtopicDatalist;
+    if (!subtopicDatalist) return;
+
+    subtopicDatalist.innerHTML = '';
+    const normalizedDomain = (domainName || '').trim().toLowerCase();
+    if (!normalizedDomain) return;
+
+    const domain = hierarchy.find(d => d.name.toLowerCase() === normalizedDomain);
+    if (!domain || !Array.isArray(domain.subtopics)) return;
+
+    const subtopicNames = domain.subtopics.map(s => s.name.trim()).filter(Boolean);
+    const sorted = subtopicNames.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    sorted.forEach(name => {
+        const option = dom.doc.createElement('option');
+        option.value = name;
+        subtopicDatalist.appendChild(option);
+    });
 }
 
 export async function openPromptModal({ mode = MODAL_MODE.CREATE, promptData = null } = {}) {
@@ -138,6 +149,11 @@ export async function openPromptModal({ mode = MODAL_MODE.CREATE, promptData = n
     if (result && result.aborted) {
         dom.formSubmitButton.textContent = submitLabel;
         return;
+    }
+
+    // Update subtopic datalist for existing domain in edit mode
+    if (isEdit && initialDomain) {
+        updateSubtopicDatalist(initialDomain);
     }
 
     if (dom.domainInput) dom.domainInput.disabled = false;
