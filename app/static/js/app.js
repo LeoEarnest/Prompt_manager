@@ -93,6 +93,8 @@
     const SIMPLE_PROMPT_HINT = 'Simple prompts store a single piece of content.';
     const TEMPLATE_PROMPT_HINT = 'Template prompts include configurable options that populate placeholders like {category}.';
 
+    const TEMPLATE_PREVIEW_EMPTY_MESSAGE = 'Select options to generate the preview.';
+
 
     const MODAL_MODE = {
         CREATE: 'create',
@@ -111,6 +113,7 @@
     let currentPromptMeta = null;
     let currentPromptText = '';
     let templateCategoryCounter = 0;
+    let activeTemplateDetail = null;
     let copyResetTimer = null;
     let latestRequestToken = 0;
     let latestDatalistRequest = 0;
@@ -129,6 +132,7 @@
     };
 
     const setPromptContent = (text) => {
+        activeTemplateDetail = null;
         promptContent.textContent = text;
     };
 
@@ -319,6 +323,144 @@
         return { value: result };
     };
 
+    const renderSimplePromptDetail = (content) => {
+        activeTemplateDetail = null;
+        setPromptContent(content);
+        enableCopyButton(content || '');
+    };
+
+    const createTemplateDetailControl = (categoryName, optionValues, onChange) => {
+        const wrapper = doc.createElement('div');
+        wrapper.className = 'template-detail__category';
+        const label = doc.createElement('label');
+        label.className = 'template-detail__category-label';
+        label.textContent = categoryName;
+        const select = doc.createElement('select');
+        select.className = 'template-detail__select';
+        select.dataset.category = categoryName;
+        const placeholderOption = doc.createElement('option');
+        placeholderOption.value = '';
+        placeholderOption.textContent = `Select ${categoryName}`;
+        select.appendChild(placeholderOption);
+        (Array.isArray(optionValues) ? optionValues : []).forEach((value) => {
+            const optionElement = doc.createElement('option');
+            optionElement.value = value;
+            optionElement.textContent = value;
+            select.appendChild(optionElement);
+        });
+        select.addEventListener('change', onChange);
+        wrapper.appendChild(label);
+        wrapper.appendChild(select);
+        return { wrapper, select };
+    };
+
+    const updateTemplatePreview = () => {
+        if (!activeTemplateDetail || !activeTemplateDetail.previewEl) {
+            return;
+        }
+        const { content, categories, previewEl } = activeTemplateDetail;
+        if (!categories.length) {
+            previewEl.textContent = content || '';
+            previewEl.classList.remove('is-empty');
+            enableCopyButton(content || '');
+            return;
+        }
+        const selections = {};
+        let allSelected = true;
+        categories.forEach((category) => {
+            const value = category.selectEl.value.trim();
+            if (!value) {
+                allSelected = false;
+            } else {
+                selections[category.normalized] = value;
+            }
+        });
+        if (!allSelected) {
+            previewEl.textContent = TEMPLATE_PREVIEW_EMPTY_MESSAGE;
+            previewEl.classList.add('is-empty');
+            disableCopyButton();
+            return;
+        }
+        const previewText = (content || '').replace(/\{([^{}]+)\}/g, (match, key) => {
+            const normalized = key.trim().toLowerCase();
+            return Object.prototype.hasOwnProperty.call(selections, normalized)
+                ? selections[normalized]
+                : match;
+        });
+        previewEl.textContent = previewText;
+        previewEl.classList.remove('is-empty');
+        enableCopyButton(previewText);
+    };
+
+    const renderTemplatePromptDetail = (promptMeta) => {
+        const baseContent = promptMeta.content || '';
+        const options =
+            promptMeta.configurableOptions && typeof promptMeta.configurableOptions === 'object'
+                ? promptMeta.configurableOptions
+                : null;
+
+        if (!options || Object.keys(options).length === 0) {
+            renderSimplePromptDetail(baseContent);
+            return;
+        }
+
+        disableCopyButton();
+        activeTemplateDetail = {
+            content: baseContent,
+            categories: [],
+            previewEl: null,
+        };
+
+        promptContent.innerHTML = '';
+
+        const container = doc.createElement('div');
+        container.className = 'template-detail';
+
+        const description = doc.createElement('p');
+        description.className = 'template-detail__hint';
+        description.textContent = 'Select an option for each category to build this template.';
+        container.appendChild(description);
+
+        const templateBody = doc.createElement('pre');
+        templateBody.className = 'template-detail__base';
+        templateBody.textContent = baseContent;
+        container.appendChild(templateBody);
+
+        const controlsContainer = doc.createElement('div');
+        controlsContainer.className = 'template-detail__controls';
+        Object.entries(options).forEach(([categoryName, optionValues]) => {
+            const normalized = categoryName.trim().toLowerCase();
+            const { wrapper, select } = createTemplateDetailControl(categoryName, optionValues, updateTemplatePreview);
+            controlsContainer.appendChild(wrapper);
+            activeTemplateDetail.categories.push({
+                name: categoryName,
+                normalized,
+                selectEl: select,
+            });
+        });
+        container.appendChild(controlsContainer);
+
+        const previewSection = doc.createElement('section');
+        previewSection.className = 'template-detail__preview-section';
+
+        const previewTitle = doc.createElement('h3');
+        previewTitle.className = 'template-detail__preview-title';
+        previewTitle.textContent = '实时预览';
+        previewSection.appendChild(previewTitle);
+
+        const previewOutput = doc.createElement('pre');
+        previewOutput.className = 'template-detail__preview is-empty';
+        previewOutput.textContent = TEMPLATE_PREVIEW_EMPTY_MESSAGE;
+        previewOutput.setAttribute('aria-live', 'polite');
+        previewSection.appendChild(previewOutput);
+        container.appendChild(previewSection);
+
+        activeTemplateDetail.previewEl = previewOutput;
+
+        promptContent.appendChild(container);
+        updateTemplatePreview();
+    };
+
 
     const resetFormState = () => {
         newPromptForm.reset();
@@ -385,17 +527,7 @@
             const subtopicId = typeof subtopicIdRaw === 'number' ? subtopicIdRaw : Number(subtopicIdRaw);
 
             if (!promptId || !title || Number.isNaN(subtopicId)) {
-          const PROMPT_TYPE = {
-
-        SIMPLE: 'simple',
-
-        TEMPLATE: 'template',
-
-    };
-
-
-
-          return;
+                return;
             }
 
             const listItem = doc.createElement('li');
@@ -1037,8 +1169,11 @@
                     : null;
 
             promptTitle.textContent = currentPromptMeta.title;
-            setPromptContent(currentPromptMeta.content);
-            enableCopyButton(currentPromptMeta.content);
+            if (currentPromptMeta.isTemplate) {
+                renderTemplatePromptDetail(currentPromptMeta);
+            } else {
+                renderSimplePromptDetail(currentPromptMeta.content || '');
+            }
             enableDetailActions();
 
             window.scrollTo(0, 0);
@@ -1218,6 +1353,7 @@
             content: contentValue,
             domain_name: domainValue,
             subtopic_name: subtopicValue,
+        };
 
         const isTemplateSelected = currentPromptType === PROMPT_TYPE.TEMPLATE;
         if (isTemplateSelected) {
@@ -1235,8 +1371,6 @@
             payload.is_template = false;
             payload.configurable_options = null;
         }
-
-        };
 
         const isEdit = modalMode === MODAL_MODE.EDIT && typeof editingPromptId === 'number';
         const endpoint = isEdit ? `/api/prompts/${editingPromptId}` : '/api/prompts';
@@ -1301,8 +1435,11 @@
                 breadcrumbDomain.textContent = currentPromptMeta.domainName;
                 breadcrumbSubtopic.textContent = currentPromptMeta.subtopicName;
                 promptTitle.textContent = currentPromptMeta.title || DEFAULT_PROMPT_TITLE;
-                setPromptContent(currentPromptMeta.content || '');
-                enableCopyButton(currentPromptMeta.content || '');
+                if (currentPromptMeta.isTemplate) {
+                    renderTemplatePromptDetail(currentPromptMeta);
+                } else {
+                    renderSimplePromptDetail(currentPromptMeta.content || '');
+                }
                 enableDetailActions();
             }
 
