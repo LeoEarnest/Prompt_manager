@@ -27,6 +27,15 @@
     const searchInput = doc.querySelector('[data-role="search-input"]');
     const hierarchyContainer = doc.querySelector('[data-role="hierarchy-container"]');
     const searchResultsContainer = doc.querySelector('[data-role="search-results"]');
+    const promptTypeRadios = newPromptForm ? Array.from(newPromptForm.querySelectorAll('[data-role="prompt-type-radio"]')) : [];
+    const promptTypeHint = doc.querySelector('[data-role="prompt-type-hint"]');
+    const templateBuilder = doc.querySelector('[data-role="template-builder"]');
+    const addCategoryButton = doc.querySelector('[data-role="add-category-button"]');
+    const templateCategoryList = doc.querySelector('[data-role="template-category-list"]');
+    const templateCategoryTemplate = doc.querySelector('[data-role="template-category-template"]');
+    const templateOptionTemplate = doc.querySelector('[data-role="template-option-template"]');
+    const templateEmptyState = templateCategoryList ? templateCategoryList.querySelector('[data-role="template-empty-state"]') : null;
+
 
     if (
         !appContainer ||
@@ -54,7 +63,15 @@
         !formSubmitButton ||
         !searchInput ||
         !hierarchyContainer ||
-        !searchResultsContainer
+        !searchResultsContainer ||
+        !promptTypeRadios.length ||
+        !promptTypeHint ||
+        !templateBuilder ||
+        !addCategoryButton ||
+        !templateCategoryList ||
+        !templateCategoryTemplate ||
+        !templateOptionTemplate ||
+        !templateEmptyState
     ) {
         return;
     }
@@ -73,16 +90,27 @@
     const SEARCH_LOADING_MESSAGE = 'Searching...';
     const SEARCH_DEBOUNCE_MS = 300;
 
+    const SIMPLE_PROMPT_HINT = 'Simple prompts store a single piece of content.';
+    const TEMPLATE_PROMPT_HINT = 'Template prompts include configurable options that populate placeholders like {category}.';
+
+
     const MODAL_MODE = {
         CREATE: 'create',
         EDIT: 'edit',
     };
 
+    const PROMPT_TYPE = {
+        SIMPLE: 'simple',
+        TEMPLATE: 'template',
+    };
+
     let modalMode = MODAL_MODE.CREATE;
+    let currentPromptType = PROMPT_TYPE.SIMPLE;
     let currentPromptId = null;
     let currentPromptNavButton = null;
     let currentPromptMeta = null;
     let currentPromptText = '';
+    let templateCategoryCounter = 0;
     let copyResetTimer = null;
     let latestRequestToken = 0;
     let latestDatalistRequest = 0;
@@ -159,9 +187,144 @@
         deleteButton.disabled = false;
     };
 
+
+    const updateTemplateEmptyState = () => {
+        if (!templateEmptyState) {
+            return;
+        }
+        const hasCategories = Boolean(templateCategoryList.querySelector('[data-role="template-category"]'));
+        templateEmptyState.hidden = hasCategories;
+    };
+
+    const clearTemplateBuilder = () => {
+        templateCategoryList
+            .querySelectorAll('[data-role="template-category"]').forEach((category) => category.remove());
+        templateCategoryCounter = 0;
+        updateTemplateEmptyState();
+    };
+
+    const setPromptType = (type) => {
+        const normalized = type === PROMPT_TYPE.TEMPLATE ? PROMPT_TYPE.TEMPLATE : PROMPT_TYPE.SIMPLE;
+        currentPromptType = normalized;
+        promptTypeRadios.forEach((radio) => {
+            radio.checked = radio.value === normalized;
+        });
+        const isTemplate = normalized === PROMPT_TYPE.TEMPLATE;
+        templateBuilder.hidden = !isTemplate;
+        templateBuilder.setAttribute('aria-hidden', isTemplate ? 'false' : 'true');
+        if (promptTypeHint) {
+            promptTypeHint.textContent = isTemplate ? TEMPLATE_PROMPT_HINT : SIMPLE_PROMPT_HINT;
+        }
+    };
+
+    const addOptionToCategory = (categoryElement, value = '') => {
+        if (!categoryElement) {
+            return null;
+        }
+        const fragment = templateOptionTemplate.content.cloneNode(true);
+        const optionElement = fragment.querySelector('[data-role="template-option"]');
+        const optionInput = optionElement.querySelector('[data-role="option-input"]');
+        const removeButton = optionElement.querySelector('[data-role="remove-option-button"]');
+        optionInput.value = value;
+        removeButton.addEventListener('click', () => {
+            optionElement.remove();
+        });
+        const optionList = categoryElement.querySelector('[data-role="template-option-list"]');
+        optionList.appendChild(optionElement);
+        return optionInput;
+    };
+
+    const createCategoryElement = (name = '', optionValues = []) => {
+        const fragment = templateCategoryTemplate.content.cloneNode(true);
+        const categoryElement = fragment.querySelector('[data-role="template-category"]');
+        const nameInput = categoryElement.querySelector('[data-role="category-name-input"]');
+        const removeButton = categoryElement.querySelector('[data-role="remove-category-button"]');
+        const addOptionButton = categoryElement.querySelector('[data-role="add-option-button"]');
+
+        templateCategoryCounter += 1;
+        categoryElement.dataset.categoryId = `template-category-${templateCategoryCounter}`;
+        nameInput.value = name;
+
+        removeButton.addEventListener('click', () => {
+            categoryElement.remove();
+            updateTemplateEmptyState();
+        });
+
+        addOptionButton.addEventListener('click', () => {
+            const newOptionInput = addOptionToCategory(categoryElement);
+            if (newOptionInput) {
+                newOptionInput.focus({ preventScroll: true });
+            }
+        });
+
+        const values = Array.isArray(optionValues) && optionValues.length > 0 ? optionValues : [''];
+        values.forEach((optionValue) => {
+            addOptionToCategory(categoryElement, optionValue);
+        });
+
+        templateCategoryList.appendChild(categoryElement);
+        updateTemplateEmptyState();
+        return categoryElement;
+    };
+
+    const hydrateTemplateBuilder = (options) => {
+        clearTemplateBuilder();
+        if (!options || typeof options !== 'object') {
+            return;
+        }
+        Object.entries(options).forEach(([categoryName, optionValues]) => {
+            createCategoryElement(categoryName, Array.isArray(optionValues) ? optionValues : []);
+        });
+        updateTemplateEmptyState();
+    };
+
+    const collectTemplateConfiguration = () => {
+        const categories = Array.from(templateCategoryList.querySelectorAll('[data-role="template-category"]'));
+        if (categories.length === 0) {
+            return { error: 'Add at least one category with options for a template prompt.' };
+        }
+
+        const result = {};
+        const seenNames = new Set();
+
+        for (const categoryElement of categories) {
+            const nameInput = categoryElement.querySelector('[data-role="category-name-input"]');
+            const rawName = nameInput ? nameInput.value.trim() : '';
+            if (!rawName) {
+                return { error: 'Each category requires a name.', focus: nameInput };
+            }
+            const normalizedName = rawName.toLowerCase();
+            if (seenNames.has(normalizedName)) {
+                return { error: 'Category names must be unique.', focus: nameInput };
+            }
+            seenNames.add(normalizedName);
+
+            const optionInputs = Array.from(categoryElement.querySelectorAll('[data-role="option-input"]'));
+            if (optionInputs.length === 0) {
+                return { error: `Add at least one option for "${rawName}".`, focus: nameInput };
+            }
+
+            const optionValues = [];
+            for (const optionInput of optionInputs) {
+                const value = optionInput.value.trim();
+                if (!value) {
+                    return { error: 'Option values cannot be empty.', focus: optionInput };
+                }
+                optionValues.push(value);
+            }
+
+            result[rawName] = optionValues;
+        }
+
+        return { value: result };
+    };
+
+
     const resetFormState = () => {
         newPromptForm.reset();
         hideFormError();
+        setPromptType(PROMPT_TYPE.SIMPLE);
+        clearTemplateBuilder();
         if (domainInput) {
             domainInput.disabled = false;
             domainInput.value = '';
@@ -222,7 +385,17 @@
             const subtopicId = typeof subtopicIdRaw === 'number' ? subtopicIdRaw : Number(subtopicIdRaw);
 
             if (!promptId || !title || Number.isNaN(subtopicId)) {
-                return;
+          const PROMPT_TYPE = {
+
+        SIMPLE: 'simple',
+
+        TEMPLATE: 'template',
+
+    };
+
+
+
+          return;
             }
 
             const listItem = doc.createElement('li');
@@ -668,6 +841,10 @@
 
         hideFormError();
 
+        newPromptForm.reset();
+        clearTemplateBuilder();
+        setPromptType(PROMPT_TYPE.SIMPLE);
+
         let initialDomain = '';
         let initialSubtopic = '';
 
@@ -676,8 +853,12 @@
             newPromptForm.content.value = promptData.content || '';
             initialDomain = (promptData.domainName || '').trim();
             initialSubtopic = (promptData.subtopicName || '').trim();
-        } else {
-            newPromptForm.reset();
+
+            const isTemplatePrompt = Boolean(promptData.isTemplate);
+            setPromptType(isTemplatePrompt ? PROMPT_TYPE.TEMPLATE : PROMPT_TYPE.SIMPLE);
+            if (isTemplatePrompt) {
+                hydrateTemplateBuilder(promptData.configurableOptions);
+            }
         }
 
         if (domainInput) {
@@ -758,6 +939,27 @@
         }, 220);
     };
 
+    promptTypeRadios.forEach((radio) => {
+        radio.addEventListener('change', () => {
+            if (!radio.checked) {
+                return;
+            }
+            setPromptType(radio.value);
+            if (currentPromptType === PROMPT_TYPE.TEMPLATE && !templateCategoryList.querySelector('[data-role="template-category"]')) {
+                createCategoryElement();
+            }
+        });
+    });
+
+    addCategoryButton.addEventListener('click', () => {
+        const categoryElement = createCategoryElement();
+        const nameInput = categoryElement.querySelector('[data-role="category-name-input"]');
+        if (nameInput) {
+            nameInput.focus({ preventScroll: true });
+        }
+    });
+
+
     searchInput.addEventListener('input', () => {
         scheduleSearch(searchInput.value);
     });
@@ -798,6 +1000,8 @@
             subtopicName,
             title: '',
             content: '',
+            isTemplate: false,
+            configurableOptions: null,
         };
 
         breadcrumbDomain.textContent = domainName;
@@ -826,6 +1030,11 @@
 
             currentPromptMeta.title = payload.title || DEFAULT_PROMPT_TITLE;
             currentPromptMeta.content = payload.content || '';
+            currentPromptMeta.isTemplate = Boolean(payload.is_template);
+            currentPromptMeta.configurableOptions =
+                payload.configurable_options && typeof payload.configurable_options === 'object'
+                    ? payload.configurable_options
+                    : null;
 
             promptTitle.textContent = currentPromptMeta.title;
             setPromptContent(currentPromptMeta.content);
@@ -891,6 +1100,8 @@
                 domainId: currentPromptMeta.domainId,
                 domainName: currentPromptMeta.domainName,
                 subtopicName: currentPromptMeta.subtopicName,
+                isTemplate: Boolean(currentPromptMeta.isTemplate),
+                configurableOptions: currentPromptMeta.configurableOptions,
             },
         });
     });
@@ -1007,6 +1218,24 @@
             content: contentValue,
             domain_name: domainValue,
             subtopic_name: subtopicValue,
+
+        const isTemplateSelected = currentPromptType === PROMPT_TYPE.TEMPLATE;
+        if (isTemplateSelected) {
+            const configResult = collectTemplateConfiguration();
+            if (configResult.error) {
+                showFormError(configResult.error);
+                if (configResult.focus instanceof HTMLElement) {
+                    configResult.focus.focus({ preventScroll: true });
+                }
+                return;
+            }
+            payload.is_template = true;
+            payload.configurable_options = configResult.value;
+        } else {
+            payload.is_template = false;
+            payload.configurable_options = null;
+        }
+
         };
 
         const isEdit = modalMode === MODAL_MODE.EDIT && typeof editingPromptId === 'number';
@@ -1061,6 +1290,11 @@
                             ? responseBody.domain_id
                             : Number(responseBody.domain_id),
                     domainName: responseBody.domain_name || 'Domain',
+                    isTemplate: Boolean(responseBody.is_template),
+                    configurableOptions:
+                        responseBody.configurable_options && typeof responseBody.configurable_options === 'object'
+                            ? responseBody.configurable_options
+                            : null,
                 };
                 currentPromptNavButton = buttonToFocus || null;
 
@@ -1091,6 +1325,8 @@
         }
     });
 
+    setPromptType(PROMPT_TYPE.SIMPLE);
+    clearTemplateBuilder();
     renderSearchMessage(DEFAULT_SEARCH_MESSAGE);
 
     if (!promptTitle.textContent) {

@@ -56,13 +56,24 @@ def test_structure_endpoint_returns_expected_shape(app, client):
     assert 'content' not in prompts[0]
 
 
+
 def test_prompt_detail_returns_prompt_and_handles_missing(app, client):
     """The prompt detail endpoint should return data or a 404 payload."""
 
     with app.app_context():
         domain = Domain(name='Design')
         subtopic = Subtopic(name='UX', domain=domain)
-        prompt = Prompt(title='Persona builder', content='Draft a UX persona.', subtopic=subtopic)
+        options = {
+            'creature': ['fox'],
+            'action': ['scouting'],
+        }
+        prompt = Prompt(
+            title='Persona builder',
+            content='Draft a UX persona.',
+            subtopic=subtopic,
+            is_template=True,
+            configurable_options=options,
+        )
 
         db.session.add(domain)
         db.session.commit()
@@ -71,16 +82,16 @@ def test_prompt_detail_returns_prompt_and_handles_missing(app, client):
 
     response = client.get(f'/api/prompts/{prompt_id}')
     assert response.status_code == 200
-    assert response.get_json() == {
-        'id': prompt_id,
-        'title': 'Persona builder',
-        'content': 'Draft a UX persona.',
-    }
+    payload = response.get_json()
+    assert payload['id'] == prompt_id
+    assert payload['title'] == 'Persona builder'
+    assert payload['content'] == 'Draft a UX persona.'
+    assert payload['is_template'] is True
+    assert payload['configurable_options'] == options
 
     missing_response = client.get(f'/api/prompts/{prompt_id + 1000}')
     assert missing_response.status_code == 404
     assert missing_response.get_json() == {'error': 'Prompt not found'}
-
 
 def test_create_prompt_success(app, client):
     """Posting valid data should persist a prompt and return details."""
@@ -103,6 +114,8 @@ def test_create_prompt_success(app, client):
     assert isinstance(data['subtopic_id'], int)
     assert isinstance(data['domain_id'], int)
     assert isinstance(data['id'], int)
+    assert data['is_template'] is False
+    assert data['configurable_options'] is None
 
     with app.app_context():
         stored = db.session.get(Prompt, data['id'])

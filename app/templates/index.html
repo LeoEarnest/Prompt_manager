@@ -162,6 +162,31 @@
             </header>
             <form class="modal-form" data-role="new-prompt-form">
                 <div class="form-field">
+                    <span class="form-label">Prompt Type</span>
+                    <div class="form-control-group" data-role="prompt-type-toggle">
+                        <label class="radio-option">
+                            <input
+                                type="radio"
+                                name="prompt_type"
+                                value="simple"
+                                data-role="prompt-type-radio"
+                                checked
+                            >
+                            <span>Simple Prompt</span>
+                        </label>
+                        <label class="radio-option">
+                            <input
+                                type="radio"
+                                name="prompt_type"
+                                value="template"
+                                data-role="prompt-type-radio"
+                            >
+                            <span>Template Prompt</span>
+                        </label>
+                    </div>
+                    <p class="form-hint" data-role="prompt-type-hint">Template prompts include configurable options that populate placeholders like {category}.</p>
+                </div>
+                <div class="form-field">
                     <label class="form-label" for="new-prompt-domain">Domain</label>
                     <input
                         class="form-control"
@@ -208,12 +233,48 @@
                         required
                     ></textarea>
                 </div>
+                <div class="form-field template-builder" data-role="template-builder" hidden>
+                    <div class="template-builder-header">
+                        <p class="form-label">Configurable Options</p>
+                        <button class="secondary-button" type="button" data-role="add-category-button">Add Category</button>
+                    </div>
+                    <p class="form-hint">Categories correspond to placeholders in your content. Each option becomes a selectable value.</p>
+                    <div class="template-category-list" data-role="template-category-list">
+                        <p class="empty-state" data-role="template-empty-state">No categories yet. Add one to begin.</p>
+                    </div>
+                </div>
                 <p class="form-error" data-role="form-error" hidden></p>
                 <div class="form-actions">
                     <button class="primary-button" type="submit" data-role="form-submit-button">Save Prompt</button>
                     <button class="secondary-button" type="button" data-role="form-cancel-button">Cancel</button>
                 </div>
             </form>
+            <template data-role="template-category-template">
+                <div class="template-category" data-role="template-category">
+                    <div class="template-category-header">
+                        <input
+                            type="text"
+                            class="form-control template-category-name"
+                            placeholder="Category name (e.g., creature)"
+                            data-role="category-name-input"
+                        >
+                        <button class="icon-button" type="button" data-role="remove-category-button" aria-label="Remove category">&times;</button>
+                    </div>
+                    <div class="template-option-list" data-role="template-option-list"></div>
+                    <button class="link-button" type="button" data-role="add-option-button">Add Option</button>
+                </div>
+            </template>
+            <template data-role="template-option-template">
+                <div class="template-option" data-role="template-option">
+                    <input
+                        type="text"
+                        class="form-control template-option-input"
+                        placeholder="Option value"
+                        data-role="option-input"
+                    >
+                    <button class="icon-button" type="button" data-role="remove-option-button" aria-label="Remove option">&times;</button>
+                </div>
+            </template>
         </div>
     </section>
 

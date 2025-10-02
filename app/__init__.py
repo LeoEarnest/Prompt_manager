@@ -1,10 +1,12 @@
 """Application factory for the prompt manager."""
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from werkzeug.exceptions import HTTPException
 
 
 db = SQLAlchemy()
+migrate = Migrate()
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -18,6 +20,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         app.config.update(test_config)
 
     db.init_app(app)
+    migrate.init_app(app, db)
 
     from .routes import api_bp, frontend_bp  # imported lazily to avoid circular imports
 
