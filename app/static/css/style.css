@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     color-scheme: dark;
 }
 
@@ -589,3 +589,36 @@ body.modal-open {
     }
 }
 
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-wrapper .form-control {
+    width: 100%;
+    padding-right: 2.5rem; /* Make space for the button */
+}
+
+.clear-input-button {
+    position: absolute;
+    right: 1px;
+    top: 1px;
+    bottom: 1px;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 0 0.75rem;
+    font-size: 1.2rem;
+    display: none; /* Hidden by default */
+    transition: color 0.2s ease;
+}
+
+.clear-input-button:hover {
+    color: #e2e8f0;
+}
+
+.clear-input-button.is-visible {
+    display: block;
+}

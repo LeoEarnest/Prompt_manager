@@ -188,28 +188,34 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label" for="new-prompt-domain">Domain</label>
-                    <input
-                        class="form-control"
-                        id="new-prompt-domain"
-                        name="domain_name"
-                        type="text"
-                        required
-                        list="domain-list"
-                        data-role="domain-input"
-                    >
+                    <div class="input-wrapper">
+                        <input
+                            class="form-control"
+                            id="new-prompt-domain"
+                            name="domain_name"
+                            type="text"
+                            required
+                            list="domain-list"
+                            data-role="domain-input"
+                        >
+                        <button type="button" class="clear-input-button" data-role="clear-domain-button" aria-label="Clear domain input" hidden>&times;</button>
+                    </div>
                     <datalist id="domain-list" data-role="domain-datalist"></datalist>
                 </div>
                 <div class="form-field">
                     <label class="form-label" for="new-prompt-subtopic">Subtopic</label>
-                    <input
-                        class="form-control"
-                        id="new-prompt-subtopic"
-                        name="subtopic_name"
-                        type="text"
-                        required
-                        list="subtopic-list"
-                        data-role="subtopic-input"
-                    >
+                    <div class="input-wrapper">
+                        <input
+                            class="form-control"
+                            id="new-prompt-subtopic"
+                            name="subtopic_name"
+                            type="text"
+                            required
+                            list="subtopic-list"
+                            data-role="subtopic-input"
+                        >
+                        <button type="button" class="clear-input-button" data-role="clear-subtopic-button" aria-label="Clear subtopic input" hidden>&times;</button>
+                    </div>
                     <datalist id="subtopic-list" data-role="subtopic-datalist"></datalist>
                 </div>
                 <div class="form-field">
