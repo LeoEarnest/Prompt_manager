@@ -36,6 +36,9 @@ export const templateCategoryTemplate = doc.querySelector('[data-role="template-
 export const templateOptionTemplate = doc.querySelector('[data-role="template-option-template"]');
 export const templateEmptyState = templateCategoryList ? templateCategoryList.querySelector('[data-role="template-empty-state"]') : null;
 
+export const clearDomainButton = doc.querySelector('[data-role="clear-domain-button"]');
+export const clearSubtopicButton = doc.querySelector('[data-role="clear-subtopic-button"]');
+
 /**
  * Checks if all essential DOM elements are present on the page.
  * @returns {boolean} True if all elements exist, false otherwise.

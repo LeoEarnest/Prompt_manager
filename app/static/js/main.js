@@ -217,9 +217,30 @@ function initialize() {
 
     dom.newPromptForm.addEventListener('submit', (e) => handleFormSubmit(e, handleSuccessfulUpdate));
 
+    const setupInputClearButton = (input, button) => {
+        const toggleButton = () => {
+            const hasValue = input.value.trim() !== '';
+            button.classList.toggle('is-visible', hasValue);
+        };
+
+        button.addEventListener('click', () => {
+            input.value = '';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.focus();
+        });
+
+        input.addEventListener('input', toggleButton);
+        toggleButton(); // Initial check
+    };
+
+    setupInputClearButton(dom.domainInput, dom.clearDomainButton);
+    setupInputClearButton(dom.subtopicInput, dom.clearSubtopicButton);
+
     dom.domainInput.addEventListener('input', () => {
         dom.subtopicInput.value = '';
         updateSubtopicDatalist(dom.domainInput.value);
+        // Manually trigger the visibility check for the subtopic clear button
+        dom.clearSubtopicButton.classList.remove('is-visible');
     });
 }
 
