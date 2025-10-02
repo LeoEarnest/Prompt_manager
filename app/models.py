@@ -1,4 +1,4 @@
-﻿"""Database models for the prompt manager application."""
+"""Database models for the prompt manager application."""
 from __future__ import annotations
 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -55,6 +55,8 @@ class Prompt(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(256), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    is_template: Mapped[bool] = mapped_column(db.Boolean, nullable=False, default=False)
+    configurable_options: Mapped[dict | None] = mapped_column(db.JSON, nullable=True)
     subtopic_id: Mapped[int] = mapped_column(ForeignKey('subtopics.id'), nullable=False)
 
     subtopic: Mapped['Subtopic'] = relationship('Subtopic', back_populates='prompts')

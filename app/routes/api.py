@@ -77,11 +77,13 @@ def prompt_detail(prompt_id: int) -> Response:
             'id': prompt.id,
             'title': prompt.title,
             'content': prompt.content,
+            'is_template': prompt.is_template,
+            'configurable_options': prompt.configurable_options,
         }
     )
 
 
-def _validate_prompt_payload(payload: dict[str, Any]) -> tuple[dict[str, str], dict[str, str]]:
+def _validate_prompt_payload(payload: dict[str, Any]) -> tuple[dict[str, str], dict[str, Any]]:
     """Normalize prompt payload and return (errors, normalized_fields)."""
 
     title = (payload.get('title') or '').strip()
@@ -99,14 +101,31 @@ def _validate_prompt_payload(payload: dict[str, Any]) -> tuple[dict[str, str], d
     if not subtopic_name:
         errors['subtopic_name'] = 'Subtopic name is required.'
 
+    raw_is_template = payload.get('is_template', False)
+    if isinstance(raw_is_template, bool):
+        is_template = raw_is_template
+    else:
+        errors['is_template'] = 'is_template must be a boolean.'
+        is_template = False
+
+    raw_options = payload.get('configurable_options')
+    if raw_options is None:
+        options = None
+    elif isinstance(raw_options, dict):
+        options = raw_options
+    else:
+        errors['configurable_options'] = 'configurable_options must be a JSON object.'
+        options = None
+
     fields = {
         'title': title,
         'content': content,
         'domain_name': domain_name,
         'subtopic_name': subtopic_name,
+        'is_template': is_template,
+        'configurable_options': options,
     }
     return errors, fields
-
 
 def _get_or_create_domain_and_subtopic(domain_name: str, subtopic_name: str) -> tuple[Domain, Subtopic]:
     """Fetch existing domain/subtopic pair or create new entries."""
@@ -141,6 +160,8 @@ def _serialize_prompt(prompt: Prompt) -> dict[str, Any]:
         'id': prompt.id,
         'title': prompt.title,
         'content': prompt.content,
+        'is_template': prompt.is_template,
+        'configurable_options': prompt.configurable_options,
         'subtopic_id': subtopic.id if subtopic is not None else None,
         'subtopic_name': subtopic.name if subtopic is not None else None,
         'domain_id': domain.id if domain is not None else None,
@@ -163,7 +184,13 @@ def create_prompt() -> Response:
         fields['subtopic_name'],
     )
 
-    prompt = Prompt(title=fields['title'], content=fields['content'], subtopic=subtopic)
+    prompt = Prompt(
+        title=fields['title'],
+        content=fields['content'],
+        subtopic=subtopic,
+        is_template=fields['is_template'],
+        configurable_options=fields['configurable_options'],
+    )
     db.session.add(prompt)
     db.session.commit()
 
@@ -192,6 +219,8 @@ def update_prompt(prompt_id: int) -> Response:
     prompt.title = fields['title']
     prompt.content = fields['content']
     prompt.subtopic = subtopic
+    prompt.is_template = fields['is_template']
+    prompt.configurable_options = fields['configurable_options']
 
     db.session.commit()
     db.session.refresh(prompt)

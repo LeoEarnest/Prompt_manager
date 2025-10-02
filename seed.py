@@ -48,7 +48,7 @@ SAMPLE_DATA = [
                 'name': '科幻小说',
                 'prompts': [
                     {
-                        'title': '世界观设定',
+                        'title': '世界观设设定',
                         'content': (
                             'Create a speculative fiction setting outline with technology, '
                             'societal shifts, and key conflicts.'
@@ -79,6 +79,17 @@ SAMPLE_DATA = [
     },
 ]
 
+TEMPLATE_PROMPT = {
+    'title': 'Dynamic creature photography prompt',
+    'content': 'A high-quality, detailed photograph of a {creature}, {action}, in a {location}.',
+    'is_template': True,
+    'configurable_options': {
+        'creature': ['fox', 'bear', 'owl'],
+        'action': ['sleeping peacefully', 'hunting for food', 'staring at the camera'],
+        'location': ['a snowy forest', 'a sun-drenched field', 'a misty mountain top'],
+    },
+}
+
 
 def seed() -> None:
     """Reset the database and populate it with sample content."""
@@ -92,11 +103,16 @@ def seed() -> None:
             domain = Domain(name=domain_data['name'])
             for subtopic_data in domain_data['subtopics']:
                 subtopic = Subtopic(name=subtopic_data['name'], domain=domain)
-                for prompt_data in subtopic_data['prompts']:
+                prompts = subtopic_data['prompts'][:]
+                if subtopic_data['name'] == 'Python Flask':
+                    prompts.append(TEMPLATE_PROMPT)
+                for prompt_data in prompts:
                     Prompt(
                         title=prompt_data['title'],
                         content=prompt_data['content'],
                         subtopic=subtopic,
+                        is_template=prompt_data.get('is_template', False),
+                        configurable_options=prompt_data.get('configurable_options'),
                     )
             db.session.add(domain)
 

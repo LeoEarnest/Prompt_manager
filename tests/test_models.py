@@ -56,3 +56,29 @@ def test_domain_name_must_be_unique(app):
         db.session.rollback()
 
         assert Domain.query.count() == 1
+
+def test_prompt_template_fields_persist(app):
+    """Template prompts should persist boolean flag and options payload."""
+
+    with app.app_context():
+        domain = Domain(name='Photography')
+        subtopic = Subtopic(name='Wildlife', domain=domain)
+        options = {
+            'creature': ['fox', 'owl'],
+            'action': ['hunting'],
+        }
+        prompt = Prompt(
+            title='Wildlife template',
+            content='Capture a {creature} while {action}.',
+            subtopic=subtopic,
+            is_template=True,
+            configurable_options=options,
+        )
+
+        db.session.add(domain)
+        db.session.commit()
+
+        fetched = db.session.get(Prompt, prompt.id)
+        assert fetched is not None
+        assert fetched.is_template is True
+        assert fetched.configurable_options == options
