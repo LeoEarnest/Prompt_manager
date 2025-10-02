@@ -47,6 +47,7 @@ let state = {
     searchDebounceTimer: null,
     latestSearchRequest: 0,
     isSearchActive: false,
+    promptHierarchy: [],
 };
 
 export function getState() {
