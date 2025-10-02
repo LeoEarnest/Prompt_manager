@@ -36,3 +36,6 @@ Thumbs.db
 
 # Backups
 backup_db/
+
+# Agent
+AGENTS.md
