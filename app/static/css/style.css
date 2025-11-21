@@ -622,3 +622,38 @@ body.modal-open {
 .clear-input-button.is-visible {
     display: block;
 }
+
+/* Collapsible Menu Styles */
+.collapsible-header {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.3rem;
+    transition: background-color 0.2s ease;
+}
+
+.collapsible-header:hover {
+    background: rgba(51, 65, 85, 0.35);
+}
+
+.collapsible-header::before {
+    content: '▶';
+    display: inline-block;
+    font-size: 0.7em;
+    transition: transform 0.2s ease;
+}
+
+.collapsible-header.expanded::before {
+    transform: rotate(90deg);
+}
+
+.collapsible-content {
+    display: none;
+    padding-left: 1.25rem;
+}
+
+.collapsible-content.expanded {
+    display: block;
+}

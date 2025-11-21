@@ -86,12 +86,12 @@ export function renderHierarchy(structure) {
         domainArticle.dataset.domainName = domain.name;
 
         const domainH2 = dom.doc.createElement('h2');
-        domainH2.className = 'domain-name';
+        domainH2.className = 'domain-name collapsible-header';
         domainH2.textContent = domain.name;
         domainArticle.appendChild(domainH2);
 
         const subtopicsDiv = dom.doc.createElement('div');
-        subtopicsDiv.className = 'subtopics';
+        subtopicsDiv.className = 'subtopics collapsible-content';
 
         const sortedSubtopics = (domain.subtopics || []).slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
@@ -103,12 +103,12 @@ export function renderHierarchy(structure) {
                 subtopicSection.dataset.subtopicName = subtopic.name;
 
                 const subtopicH3 = dom.doc.createElement('h3');
-                subtopicH3.className = 'subtopic-name';
+                subtopicH3.className = 'subtopic-name collapsible-header';
                 subtopicH3.textContent = subtopic.name;
                 subtopicSection.appendChild(subtopicH3);
 
                 const promptListUl = dom.doc.createElement('ul');
-                promptListUl.className = 'prompt-list';
+                promptListUl.className = 'prompt-list collapsible-content';
                 promptListUl.setAttribute('aria-label', `Prompts for ${subtopic.name}`);
 
                 const sortedPrompts = (subtopic.prompts || []).slice().sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));

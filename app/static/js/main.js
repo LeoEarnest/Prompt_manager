@@ -46,60 +46,76 @@ function handleSuccessfulUpdate(responseBody, buttonToFocus) {
     }
 }
 
-async function handleNavClick(event) {
-    const trigger = event.target instanceof Element ? event.target.closest('.prompt-button') : null;
-    if (!trigger) return;
+async function handleNavPanelClick(event) {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
 
-    event.preventDefault();
-
-    const promptId = Number(trigger.dataset.id);
-    if (!promptId) return;
-
-    const domainName = trigger.dataset.domain || 'Domain';
-    const subtopicName = trigger.dataset.subtopic || 'Subtopic';
-
-    setState({
-        currentPromptId: promptId,
-        currentPromptNavButton: trigger,
-        currentPromptMeta: { id: promptId, domainName, subtopicName },
-    });
-
-    dom.breadcrumbDomain.textContent = domainName;
-    dom.breadcrumbSubtopic.textContent = subtopicName;
-    dom.promptTitle.textContent = 'Loading prompt...';
-    setPromptContent('Fetching prompt content...');
-    disableDetailActions();
-
-    dom.appContainer.classList.add('detail-view-active');
-    dom.backButton.focus({ preventScroll: true });
-
-    try {
-        const payload = await api.getPrompt(promptId);
-        if (!payload) return; // Stale request
-
-        const newMeta = {
-            ...getStateValue('currentPromptMeta'),
-            title: payload.title || DEFAULTS.PROMPT_TITLE,
-            content: payload.content || '',
-            isTemplate: Boolean(payload.is_template),
-            configurableOptions: payload.configurable_options || null,
-        };
-        setState({ currentPromptMeta: newMeta });
-
-        dom.promptTitle.textContent = newMeta.title;
-        if (newMeta.isTemplate) {
-            renderTemplatePromptDetail(newMeta);
-        } else {
-            setPromptContent(newMeta.content || '');
-            enableCopyButton(newMeta.content || '');
+    // Case 1: Click on a collapsible header (Domain or Subtopic)
+    const header = target.closest('.collapsible-header');
+    if (header) {
+        event.preventDefault();
+        const content = header.nextElementSibling;
+        if (content && content.classList.contains('collapsible-content')) {
+            header.classList.toggle('expanded');
+            content.classList.toggle('expanded');
         }
-        enableDetailActions();
-        window.scrollTo(0, 0);
-    } catch (error) {
-        console.error(error);
-        dom.promptTitle.textContent = 'Unable to load prompt';
-        setPromptContent('Please try again in a moment.');
+        return;
+    }
+
+    // Case 2: Click on a prompt button
+    const trigger = target.closest('.prompt-button');
+    if (trigger) {
+        event.preventDefault();
+
+        const promptId = Number(trigger.dataset.id);
+        if (!promptId) return;
+
+        const domainName = trigger.dataset.domain || 'Domain';
+        const subtopicName = trigger.dataset.subtopic || 'Subtopic';
+
+        setState({
+            currentPromptId: promptId,
+            currentPromptNavButton: trigger,
+            currentPromptMeta: { id: promptId, domainName, subtopicName },
+        });
+
+        dom.breadcrumbDomain.textContent = domainName;
+        dom.breadcrumbSubtopic.textContent = subtopicName;
+        dom.promptTitle.textContent = 'Loading prompt...';
+        setPromptContent('Fetching prompt content...');
         disableDetailActions();
+
+        dom.appContainer.classList.add('detail-view-active');
+        dom.backButton.focus({ preventScroll: true });
+
+        try {
+            const payload = await api.getPrompt(promptId);
+            if (!payload) return; // Stale request
+
+            const newMeta = {
+                ...getStateValue('currentPromptMeta'),
+                title: payload.title || DEFAULTS.PROMPT_TITLE,
+                content: payload.content || '',
+                isTemplate: Boolean(payload.is_template),
+                configurableOptions: payload.configurable_options || null,
+            };
+            setState({ currentPromptMeta: newMeta });
+
+            dom.promptTitle.textContent = newMeta.title;
+            if (newMeta.isTemplate) {
+                renderTemplatePromptDetail(newMeta);
+            } else {
+                setPromptContent(newMeta.content || '');
+                enableCopyButton(newMeta.content || '');
+            }
+            enableDetailActions();
+            window.scrollTo(0, 0);
+        } catch (error) {
+            console.error(error);
+            dom.promptTitle.textContent = 'Unable to load prompt';
+            setPromptContent('Please try again in a moment.');
+            disableDetailActions();
+        }
     }
 }
 
@@ -147,7 +163,7 @@ function initialize() {
     setPromptType(PROMPT_TYPE.SIMPLE);
 
     // Event Listeners
-    dom.navPanel.addEventListener('click', handleNavClick);
+    dom.navPanel.addEventListener('click', handleNavPanelClick);
     dom.searchInput.addEventListener('input', () => scheduleSearch(dom.searchInput.value));
     dom.searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {

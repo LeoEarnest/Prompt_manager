@@ -87,7 +87,7 @@ prompt_manager/
   测试采用内存 SQLite，保持快速可重复执行。
 
 ## 本地运行与配置
-1. 建议使用虚拟环境：`python -m venv env && source env/bin/activate`（Windows: `env\Scripts\activate`）。
+1. 建议使用虚拟环境，并命名为 `env_pm` 放置在项目根目录：`python -m venv env_pm && .\env_pm\Scripts\activate` (Windows)。
 2. 安装依赖：`pip install -r requirements.txt`。
 3. 初始化数据库：
    ```bash
