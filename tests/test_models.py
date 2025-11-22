@@ -3,15 +3,17 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app import create_app, db
-from app.models import Domain, Prompt, Subtopic
+from app.models import Domain, Prompt, PromptImage, Subtopic
 
 
 @pytest.fixture()
-def app():
+def app(tmp_path):
+    upload_dir = tmp_path / 'uploads'
     app = create_app({
         'TESTING': True,
         'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
         'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+        'UPLOAD_FOLDER': upload_dir,
     })
 
     with app.app_context():
@@ -82,3 +84,23 @@ def test_prompt_template_fields_persist(app):
         assert fetched is not None
         assert fetched.is_template is True
         assert fetched.configurable_options == options
+
+
+def test_prompt_images_cascade_on_delete(app):
+    """Images should be removed when their prompt is deleted."""
+
+    with app.app_context():
+        domain = Domain(name='Photography')
+        subtopic = Subtopic(name='Portraits', domain=domain)
+        prompt = Prompt(title='Headshot setup', content='Lights, camera, action.', subtopic=subtopic)
+        prompt.images.append(PromptImage(filename='sample.png', sort_order=0))
+
+        db.session.add(domain)
+        db.session.commit()
+
+        assert db.session.query(PromptImage).count() == 1
+
+        db.session.delete(prompt)
+        db.session.commit()
+
+        assert db.session.query(PromptImage).count() == 0

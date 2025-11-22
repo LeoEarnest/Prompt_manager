@@ -35,6 +35,7 @@ prompt_manager/
 | `Domain` | `id`, `name` (唯一) | 顶层主题；与 Subtopic 一对多，删除时级联清理下级实体。|
 | `Subtopic` | `id`, `name`, `domain_id` | 二级主题；与 Prompt 一对多，提供层级导航。|
 | `Prompt` | `id`, `title`, `content`, `subtopic_id`, `is_template`, `configurable_options` | 最终提示语实体。`is_template` 标记其为模板，`configurable_options` (JSON) 存储动态选项。|
+| `PromptImage` | `id`, `prompt_id`, `filename`, `sort_order` | 多图附件元数据；图片随 Prompt 级联删除，并按上传顺序展示。|
 
 - 关系策略：`selectinload` 预加载层级，减少 N+1 查询。外键完整性保证数据一致。
 - `models.py` 使用类型注解与 `mapped_column` 强化可读性。
@@ -102,6 +103,12 @@ prompt_manager/
 - 通过 `Flask-Migrate`/Alembic 维护数据库迁移。使用 `flask db upgrade` 更新结构。
 - 监控：依赖 Flask 日志记录 API 异常，可对接外部日志或 APM。
 - 静态资源轻量，可复用 CDN 或反向代理缓存。
+
+## 图片上传与展示
+- Prompt 详情 API (`/api/prompts/<id>`) 返回 `images` 数组（id、filename、url），前端在正文下方生成响应式画廊。
+- 创建/更新接口支持 `multipart/form-data`（字段同 JSON），图片字段 `images` 可多选；兼容现有 JSON 请求。
+- 默认上传目录：`app/static/uploads`（可通过 `UPLOAD_FOLDER` 配置覆盖），文件通过 `/uploads/<filename>` 路由访问。
+- 约束：仅允许 png/jpg/jpeg/gif/webp，单 Prompt 最多 8 张；删除 Prompt 时自动移除关联图片及文件。
 
 ## 后续增强建议
 - 引入标签/收藏等个性化元数据以支持更复杂检索维度。

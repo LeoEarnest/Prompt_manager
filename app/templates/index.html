@@ -240,6 +240,20 @@
                         placeholder="For Template Prompts, use {placeholders}. Example: A high-quality photo of a {creature}."
                     ></textarea>
                 </div>
+                <div class="form-field">
+                    <label class="form-label" for="new-prompt-images">Images (optional)</label>
+                    <input
+                        class="form-control"
+                        id="new-prompt-images"
+                        name="images"
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        data-role="image-input"
+                    >
+                    <p class="form-hint">Upload up to 8 images (png, jpg, jpeg, gif, webp). Images appear below the prompt content.</p>
+                    <ul class="file-preview-list" data-role="image-preview-list"></ul>
+                </div>
                 <div class="form-field template-builder" data-role="template-builder" hidden>
                     <div class="template-builder-header">
                         <p class="form-label">Configurable Options</p>

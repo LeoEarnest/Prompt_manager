@@ -15,6 +15,42 @@ function showFormError(message) {
     dom.formError.hidden = false;
 }
 
+function clearImageSelection() {
+    if (dom.imageInput) {
+        dom.imageInput.value = '';
+    }
+    if (dom.imagePreviewList) {
+        dom.imagePreviewList.innerHTML = '';
+    }
+}
+
+function renderImagePreviewList() {
+    if (!dom.imagePreviewList || !dom.imageInput) return;
+
+    const files = Array.from(dom.imageInput.files || []);
+    dom.imagePreviewList.innerHTML = '';
+
+    if (!files.length) {
+        const empty = dom.doc.createElement('li');
+        empty.className = 'empty-state';
+        empty.textContent = 'No images selected.';
+        dom.imagePreviewList.appendChild(empty);
+        return;
+    }
+
+    files.forEach((file) => {
+        const item = dom.doc.createElement('li');
+        item.className = 'file-preview-item';
+        item.textContent = file.name;
+        dom.imagePreviewList.appendChild(item);
+    });
+}
+
+export function bindImageInputHandlers() {
+    if (!dom.imageInput) return;
+    dom.imageInput.addEventListener('change', renderImagePreviewList);
+}
+
 export function resetFormState() {
     dom.newPromptForm.reset();
     hideFormError();
@@ -33,6 +69,8 @@ export function resetFormState() {
     dom.modalTitle.textContent = DEFAULTS.MODAL_TITLE;
     updateState('modalMode', MODAL_MODE.CREATE);
     updateState('editingPromptId', null);
+    clearImageSelection();
+    renderImagePreviewList();
 }
 
 async function populateDatalists() {
@@ -104,6 +142,8 @@ export async function openPromptModal({ mode = MODAL_MODE.CREATE, promptData = n
 
     hideFormError();
     dom.newPromptForm.reset();
+    clearImageSelection();
+    renderImagePreviewList();
     clearTemplateBuilder();
     setPromptType(PROMPT_TYPE.SIMPLE);
 
@@ -160,6 +200,7 @@ export async function openPromptModal({ mode = MODAL_MODE.CREATE, promptData = n
     if (dom.subtopicInput) dom.subtopicInput.disabled = false;
     dom.formSubmitButton.disabled = false;
     dom.formSubmitButton.textContent = submitLabel;
+    renderImagePreviewList();
 
     if (result && result.error) {
         showFormError('Autocomplete suggestions are unavailable. Enter values manually.');
@@ -221,7 +262,11 @@ export async function handleFormSubmit(event, onUpdate) {
         }
     }
 
-    const payload = { title: titleValue, content: contentValue, domain_name: domainValue, subtopic_name: subtopicValue };
+    const formData = new FormData();
+    formData.append('title', titleValue);
+    formData.append('content', contentValue);
+    formData.append('domain_name', domainValue);
+    formData.append('subtopic_name', subtopicValue);
 
     if (getStateValue('currentPromptType') === PROMPT_TYPE.TEMPLATE) {
         const configResult = collectTemplateConfiguration();
@@ -230,12 +275,14 @@ export async function handleFormSubmit(event, onUpdate) {
             if (configResult.focus instanceof HTMLElement) configResult.focus.focus({ preventScroll: true });
             return;
         }
-        payload.is_template = true;
-        payload.configurable_options = configResult.value;
+        formData.append('is_template', 'true');
+        formData.append('configurable_options', JSON.stringify(configResult.value));
     } else {
-        payload.is_template = false;
-        payload.configurable_options = null;
+        formData.append('is_template', 'false');
     }
+
+    const selectedFiles = dom.imageInput && dom.imageInput.files ? Array.from(dom.imageInput.files) : [];
+    selectedFiles.forEach((file) => formData.append('images', file));
 
     updateState('isSubmittingPrompt', true);
     dom.formSubmitButton.disabled = true;
@@ -243,7 +290,7 @@ export async function handleFormSubmit(event, onUpdate) {
 
     try {
         const editingId = getStateValue('editingPromptId');
-        const responseBody = await api.savePrompt(payload, editingId);
+        const responseBody = await api.savePrompt(formData, editingId);
 
         closePromptModal(false);
         const buttonToFocus = await refreshNavigationTree(responseBody.id);

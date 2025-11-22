@@ -24,6 +24,8 @@ export const subtopicDatalist = doc.querySelector('[data-role="subtopic-datalist
 export const formError = doc.querySelector('[data-role="form-error"]');
 export const formCancelButton = doc.querySelector('[data-role="form-cancel-button"]');
 export const formSubmitButton = doc.querySelector('[data-role="form-submit-button"]');
+export const imageInput = doc.querySelector('[data-role="image-input"]');
+export const imagePreviewList = doc.querySelector('[data-role="image-preview-list"]');
 export const searchInput = doc.querySelector('[data-role="search-input"]');
 export const hierarchyContainer = doc.querySelector('[data-role="hierarchy-container"]');
 export const searchResultsContainer = doc.querySelector('[data-role="search-results"]');
@@ -78,6 +80,8 @@ export function validateDomElements() {
         templateCategoryList &&
         templateCategoryTemplate &&
         templateOptionTemplate &&
-        templateEmptyState
+        templateEmptyState &&
+        imageInput &&
+        imagePreviewList
     );
 }

@@ -1,19 +1,26 @@
 """JSON API routes exposed by the prompt manager application."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
-from flask import Blueprint, Response, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request, url_for
 from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
 from werkzeug.exceptions import HTTPException
+from werkzeug.utils import secure_filename
 
 from .. import db
-from ..models import Domain, Prompt, Subtopic
+from ..models import Domain, Prompt, PromptImage, Subtopic
 from .shared import build_structure_payload
 
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
+
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+MAX_IMAGES_PER_PROMPT = 8
 
 
 @api_bp.errorhandler(HTTPException)
@@ -79,8 +86,115 @@ def prompt_detail(prompt_id: int) -> Response:
             'content': prompt.content,
             'is_template': prompt.is_template,
             'configurable_options': prompt.configurable_options,
+            'images': _serialize_images(prompt),
         }
     )
+
+
+def _collect_payload_and_files() -> tuple[dict[str, Any], list]:
+    """Return request payload and any uploaded files for image handling."""
+
+    if request.is_json:
+        return request.get_json(silent=True) or {}, []
+
+    payload = request.form.to_dict(flat=True)
+    files: list = []
+    for field_name in ('images', 'images[]'):
+        files.extend(request.files.getlist(field_name))
+    return payload, [f for f in files if f]
+
+
+def _normalize_bool(value: Any) -> bool | None:
+    """Normalize a boolean-like value from JSON or form submissions."""
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {'true', '1', 'yes', 'on'}:
+            return True
+        if lowered in {'false', '0', 'no', 'off'}:
+            return False
+    return None
+
+
+def _parse_configurable_options(raw_value: Any) -> tuple[dict | None, str | None]:
+    """Attempt to parse configurable_options input, returning (value, error)."""
+
+    if raw_value is None or raw_value == '':
+        return None, None
+
+    if isinstance(raw_value, dict):
+        return raw_value, None
+
+    if isinstance(raw_value, str):
+        try:
+            parsed = json.loads(raw_value)
+        except ValueError:
+            return None, 'configurable_options must be valid JSON.'
+        if isinstance(parsed, dict):
+            return parsed, None
+        return None, 'configurable_options must be a JSON object.'
+
+    return None, 'configurable_options must be a JSON object.'
+
+
+def _is_allowed_image(file_storage) -> bool:
+    """Quick validation for uploaded image types."""
+
+    filename = secure_filename(file_storage.filename or '')
+    extension = Path(filename).suffix.lower().lstrip('.')
+    if not filename or extension not in ALLOWED_IMAGE_EXTENSIONS:
+        return False
+    mimetype = (file_storage.mimetype or '').lower()
+    return mimetype.startswith('image/')
+
+
+def _attach_images(prompt: Prompt, files: list) -> dict[str, str]:
+    """Validate and persist uploaded images; returns an error dict if any."""
+
+    cleaned_files = [f for f in files if f and getattr(f, 'filename', '')]
+    if not cleaned_files:
+        return {}
+
+    existing_count = len(prompt.images)
+    if existing_count + len(cleaned_files) > MAX_IMAGES_PER_PROMPT:
+        return {'images': f'You can attach up to {MAX_IMAGES_PER_PROMPT} images per prompt.'}
+
+    invalid_files = [f.filename for f in cleaned_files if not _is_allowed_image(f)]
+    if invalid_files:
+        return {'images': 'Only image files (png, jpg, jpeg, gif, webp) are allowed.'}
+
+    upload_dir = Path(current_app.config.get('UPLOAD_FOLDER', 'uploads'))
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    for index, storage in enumerate(cleaned_files):
+        original_ext = Path(secure_filename(storage.filename or '')).suffix
+        fallback_ext = Path(storage.filename or '').suffix
+        extension = original_ext or fallback_ext
+        generated_name = f"{uuid4().hex}{extension}"
+        storage.save(upload_dir / generated_name)
+        prompt.images.append(
+            PromptImage(
+                filename=generated_name,
+                sort_order=existing_count + index,
+            )
+        )
+
+    return {}
+
+
+def _remove_image_file(filename: str) -> None:
+    """Attempt to remove an image from disk, ignoring missing files."""
+
+    upload_dir = Path(current_app.config.get('UPLOAD_FOLDER', 'uploads'))
+    file_path = upload_dir / filename
+    try:
+        file_path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError:
+        current_app.logger.warning('Failed to remove image file %s', file_path)
 
 
 def _validate_prompt_payload(payload: dict[str, Any]) -> tuple[dict[str, str], dict[str, Any]]:
@@ -101,21 +215,16 @@ def _validate_prompt_payload(payload: dict[str, Any]) -> tuple[dict[str, str], d
     if not subtopic_name:
         errors['subtopic_name'] = 'Subtopic name is required.'
 
-    raw_is_template = payload.get('is_template', False)
-    if isinstance(raw_is_template, bool):
-        is_template = raw_is_template
-    else:
+    normalized_bool = _normalize_bool(payload.get('is_template', False))
+    if normalized_bool is None:
         errors['is_template'] = 'is_template must be a boolean.'
         is_template = False
-
-    raw_options = payload.get('configurable_options')
-    if raw_options is None:
-        options = None
-    elif isinstance(raw_options, dict):
-        options = raw_options
     else:
-        errors['configurable_options'] = 'configurable_options must be a JSON object.'
-        options = None
+        is_template = normalized_bool
+
+    options, options_error = _parse_configurable_options(payload.get('configurable_options'))
+    if options_error:
+        errors['configurable_options'] = options_error
 
     fields = {
         'title': title,
@@ -166,14 +275,29 @@ def _serialize_prompt(prompt: Prompt) -> dict[str, Any]:
         'subtopic_name': subtopic.name if subtopic is not None else None,
         'domain_id': domain.id if domain is not None else None,
         'domain_name': domain.name if domain is not None else None,
+        'images': _serialize_images(prompt),
     }
+
+
+def _serialize_images(prompt: Prompt) -> list[dict[str, Any]]:
+    """Serialize attached images for API responses."""
+
+    images = getattr(prompt, 'images', []) or []
+    return [
+        {
+            'id': image.id,
+            'filename': image.filename,
+            'url': url_for('frontend.uploaded_file', filename=image.filename, _external=False),
+        }
+        for image in sorted(images, key=lambda img: img.sort_order)
+    ]
 
 
 @api_bp.route('/prompts', methods=['POST'])
 def create_prompt() -> Response:
     """Create a new prompt from JSON payload."""
 
-    payload = request.get_json(silent=True) or {}
+    payload, image_files = _collect_payload_and_files()
 
     errors, fields = _validate_prompt_payload(payload)
     if errors:
@@ -192,6 +316,13 @@ def create_prompt() -> Response:
         configurable_options=fields['configurable_options'],
     )
     db.session.add(prompt)
+
+    image_errors = _attach_images(prompt, image_files)
+    if image_errors:
+        db.session.rollback()
+        errors.update(image_errors)
+        return jsonify({'errors': errors}), 400
+
     db.session.commit()
 
     return jsonify(_serialize_prompt(prompt)), 201
@@ -205,7 +336,7 @@ def update_prompt(prompt_id: int) -> Response:
     if prompt is None:
         return jsonify({'error': 'Prompt not found'}), 404
 
-    payload = request.get_json(silent=True) or {}
+    payload, image_files = _collect_payload_and_files()
 
     errors, fields = _validate_prompt_payload(payload)
     if errors:
@@ -221,6 +352,12 @@ def update_prompt(prompt_id: int) -> Response:
     prompt.subtopic = subtopic
     prompt.is_template = fields['is_template']
     prompt.configurable_options = fields['configurable_options']
+
+    image_errors = _attach_images(prompt, image_files)
+    if image_errors:
+        db.session.rollback()
+        errors.update(image_errors)
+        return jsonify({'errors': errors}), 400
 
     db.session.commit()
     db.session.refresh(prompt)
@@ -238,6 +375,9 @@ def delete_prompt(prompt_id: int) -> Response:
 
     subtopic = prompt.subtopic
     domain = subtopic.domain if subtopic else None
+
+    for image in list(prompt.images):
+        _remove_image_file(image.filename)
 
     db.session.delete(prompt)
     db.session.flush()
@@ -267,7 +407,8 @@ def search_prompts() -> Response:
 
     prompts = (
         Prompt.query.options(
-            selectinload(Prompt.subtopic).selectinload(Subtopic.domain)
+            selectinload(Prompt.subtopic).selectinload(Subtopic.domain),
+            selectinload(Prompt.images),
         )
         .filter(
             or_(

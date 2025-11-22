@@ -1,4 +1,7 @@
 ﻿"""Tests covering the API endpoints for prompt retrieval."""
+from io import BytesIO
+from pathlib import Path
+
 import pytest
 
 from app import create_app, db
@@ -6,11 +9,13 @@ from app.models import Domain, Prompt, Subtopic
 
 
 @pytest.fixture()
-def app():
+def app(tmp_path):
+    upload_dir = tmp_path / 'uploads'
     app = create_app({
         'TESTING': True,
         'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
         'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+        'UPLOAD_FOLDER': upload_dir,
     })
 
     with app.app_context():
@@ -88,6 +93,7 @@ def test_prompt_detail_returns_prompt_and_handles_missing(app, client):
     assert payload['content'] == 'Draft a UX persona.'
     assert payload['is_template'] is True
     assert payload['configurable_options'] == options
+    assert payload['images'] == []
 
     missing_response = client.get(f'/api/prompts/{prompt_id + 1000}')
     assert missing_response.status_code == 404
@@ -113,9 +119,11 @@ def test_create_prompt_success(app, client):
     assert data['domain_name'] == payload['domain_name']
     assert isinstance(data['subtopic_id'], int)
     assert isinstance(data['domain_id'], int)
+    assert data['images'] == []
     assert isinstance(data['id'], int)
     assert data['is_template'] is False
     assert data['configurable_options'] is None
+    assert data['images'] == []
 
     with app.app_context():
         stored = db.session.get(Prompt, data['id'])
@@ -126,6 +134,33 @@ def test_create_prompt_success(app, client):
         assert subtopic is not None
         assert subtopic.name == payload['subtopic_name']
         assert subtopic.domain.name == payload['domain_name']
+
+
+def test_create_prompt_with_images(app, client, tmp_path):
+    """Multipart payloads with images should attach files and return URLs."""
+
+    response = client.post(
+        '/api/prompts',
+        data={
+            'title': 'Style board',
+            'content': 'Reference images for the style.',
+            'domain_name': 'Design',
+            'subtopic_name': 'Moodboard',
+            'images': [
+                (BytesIO(b'image-one'), 'one.png'),
+                (BytesIO(b'image-two'), 'two.jpg'),
+            ],
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.get_json()
+    assert len(data['images']) == 2
+    assert all(item['url'].startswith('/uploads/') for item in data['images'])
+
+    for item in data['images']:
+        file_path = tmp_path / 'uploads' / Path(item['filename'])
+        assert file_path.exists()
 
 
 def test_create_prompt_validation_errors(app, client):

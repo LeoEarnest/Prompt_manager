@@ -2,9 +2,42 @@ import * as dom from './dom.js';
 import * as api from './api.js';
 import { DEFAULTS, updateState, getStateValue, escapeSelector } from './state.js';
 
-export function setPromptContent(text) {
+export function renderPromptGallery(images = []) {
+    if (!Array.isArray(images) || images.length === 0) return null;
+
+    const gallery = dom.doc.createElement('div');
+    gallery.className = 'prompt-images';
+
+    images.forEach((image) => {
+        if (!image || !image.url) return;
+        const figure = dom.doc.createElement('figure');
+        figure.className = 'prompt-images__item';
+
+        const img = dom.doc.createElement('img');
+        img.src = image.url;
+        img.alt = image.filename || 'Prompt image';
+        img.loading = 'lazy';
+
+        figure.appendChild(img);
+        gallery.appendChild(figure);
+    });
+
+    return gallery.childElementCount ? gallery : null;
+}
+
+export function setPromptContent(text, images = []) {
     updateState('activeTemplateDetail', null);
-    dom.promptContent.textContent = text;
+    dom.promptContent.innerHTML = '';
+
+    const textBlock = dom.doc.createElement('pre');
+    textBlock.className = 'prompt-content__text';
+    textBlock.textContent = text;
+    dom.promptContent.appendChild(textBlock);
+
+    const gallery = renderPromptGallery(images);
+    if (gallery) {
+        dom.promptContent.appendChild(gallery);
+    }
 }
 
 function clearCopyResetTimer() {

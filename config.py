@@ -13,6 +13,10 @@ class Config:
 
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    UPLOAD_FOLDER = os.environ.get(
+        'UPLOAD_FOLDER',
+        (BASE_DIR / 'app' / 'static' / 'uploads').as_posix(),
+    )
 
     _default_db_path = BASE_DIR / 'prompt_manager.db'
     SQLALCHEMY_DATABASE_URI = os.environ.get(

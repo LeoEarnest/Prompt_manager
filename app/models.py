@@ -60,6 +60,29 @@ class Prompt(db.Model):
     subtopic_id: Mapped[int] = mapped_column(ForeignKey('subtopics.id'), nullable=False)
 
     subtopic: Mapped['Subtopic'] = relationship('Subtopic', back_populates='prompts')
+    images: Mapped[list['PromptImage']] = relationship(
+        'PromptImage',
+        back_populates='prompt',
+        cascade='all, delete-orphan',
+        lazy='selectin',
+        order_by='PromptImage.sort_order',
+    )
 
     def __repr__(self) -> str:  # pragma: no cover - trivial debug helper
         return f"<Prompt id={self.id!r} title={self.title!r} subtopic_id={self.subtopic_id!r}>"
+
+
+class PromptImage(db.Model):
+    """Stores uploaded image metadata for a prompt."""
+
+    __tablename__ = 'prompt_images'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    prompt_id: Mapped[int] = mapped_column(ForeignKey('prompts.id', ondelete='CASCADE'), nullable=False)
+    filename: Mapped[str] = mapped_column(String(256), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    prompt: Mapped['Prompt'] = relationship('Prompt', back_populates='images')
+
+    def __repr__(self) -> str:  # pragma: no cover - trivial debug helper
+        return f"<PromptImage id={self.id!r} prompt_id={self.prompt_id!r} filename={self.filename!r}>"

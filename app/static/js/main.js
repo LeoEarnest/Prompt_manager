@@ -1,7 +1,7 @@
 import * as dom from './modules/dom.js';
 import * as api from './modules/api.js';
 import { MODAL_MODE, PROMPT_TYPE, DEFAULTS, setState, getStateValue } from './modules/state.js';
-import { openPromptModal, closePromptModal, handleFormSubmit, updateSubtopicDatalist } from './modules/modal.js';
+import { openPromptModal, closePromptModal, handleFormSubmit, updateSubtopicDatalist, bindImageInputHandlers } from './modules/modal.js';
 import { scheduleSearch, refreshSearchResultsIfNeeded, initSearch } from './modules/search.js';
 import { setPromptType, createCategoryElement, renderTemplatePromptDetail } from './modules/template.js';
 import {
@@ -29,6 +29,7 @@ function handleSuccessfulUpdate(responseBody, buttonToFocus) {
             domainName: responseBody.domain_name || 'Domain',
             isTemplate: Boolean(responseBody.is_template),
             configurableOptions: responseBody.configurable_options || null,
+            images: Array.isArray(responseBody.images) ? responseBody.images : [],
         };
         setState({ currentPromptMeta: newMeta, currentPromptNavButton: buttonToFocus || null });
 
@@ -39,7 +40,7 @@ function handleSuccessfulUpdate(responseBody, buttonToFocus) {
         if (newMeta.isTemplate) {
             renderTemplatePromptDetail(newMeta);
         } else {
-            setPromptContent(newMeta.content || '');
+            setPromptContent(newMeta.content || '', newMeta.images);
             enableCopyButton(newMeta.content || '');
         }
         enableDetailActions();
@@ -98,6 +99,7 @@ async function handleNavPanelClick(event) {
                 content: payload.content || '',
                 isTemplate: Boolean(payload.is_template),
                 configurableOptions: payload.configurable_options || null,
+                images: Array.isArray(payload.images) ? payload.images : [],
             };
             setState({ currentPromptMeta: newMeta });
 
@@ -105,7 +107,7 @@ async function handleNavPanelClick(event) {
             if (newMeta.isTemplate) {
                 renderTemplatePromptDetail(newMeta);
             } else {
-                setPromptContent(newMeta.content || '');
+                setPromptContent(newMeta.content || '', newMeta.images);
                 enableCopyButton(newMeta.content || '');
             }
             enableDetailActions();
@@ -161,6 +163,7 @@ function initialize() {
     initUI();
     initSearch();
     setPromptType(PROMPT_TYPE.SIMPLE);
+    bindImageInputHandlers();
 
     // Event Listeners
     dom.navPanel.addEventListener('click', handleNavPanelClick);

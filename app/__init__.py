@@ -27,7 +27,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(frontend_bp)
     app.register_blueprint(api_bp)
 
-    from .models import Domain, Prompt, Subtopic  # imported lazily to avoid circular imports
+    from .models import Domain, Prompt, PromptImage, Subtopic  # imported lazily to avoid circular imports
 
     @app.errorhandler(404)
     def handle_not_found(error: HTTPException):
@@ -59,6 +59,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             'Domain': Domain,
             'Subtopic': Subtopic,
             'Prompt': Prompt,
+            'PromptImage': PromptImage,
         }
 
     return app

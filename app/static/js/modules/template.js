@@ -1,6 +1,6 @@
 import * as dom from './dom.js';
 import { DEFAULTS, PROMPT_TYPE, updateState, getStateValue } from './state.js';
-import { enableCopyButton, disableCopyButton, setPromptContent } from './ui.js';
+import { enableCopyButton, disableCopyButton, setPromptContent, renderPromptGallery } from './ui.js';
 
 function addOptionToCategory(categoryElement, value = '') {
     if (!categoryElement) return null;
@@ -169,9 +169,10 @@ function updateTemplatePreview() {
 export function renderTemplatePromptDetail(promptMeta) {
     const baseContent = promptMeta.content || '';
     const options = promptMeta.configurableOptions && typeof promptMeta.configurableOptions === 'object' ? promptMeta.configurableOptions : null;
+    const images = Array.isArray(promptMeta.images) ? promptMeta.images : [];
 
     if (!options || Object.keys(options).length === 0) {
-        setPromptContent(baseContent);
+        setPromptContent(baseContent, images);
         enableCopyButton(baseContent || '');
         return;
     }
@@ -224,6 +225,11 @@ export function renderTemplatePromptDetail(promptMeta) {
     activeTemplateDetail.previewEl = previewOutput;
     dom.promptContent.appendChild(container);
     updateTemplatePreview();
+
+    const gallery = renderPromptGallery(images);
+    if (gallery) {
+        dom.promptContent.appendChild(gallery);
+    }
 }
 
 export function setPromptType(type) {

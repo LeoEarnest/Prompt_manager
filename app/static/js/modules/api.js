@@ -48,12 +48,16 @@ export async function savePrompt(payload, editingPromptId) {
     const endpoint = isEdit ? `/api/prompts/${editingPromptId}` : '/api/prompts';
     const method = isEdit ? 'PUT' : 'POST';
 
+    const isFormData = payload instanceof FormData;
+
     return fetchJSON(endpoint, {
         method,
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+        headers: isFormData
+            ? undefined
+            : {
+                  'Content-Type': 'application/json',
+              },
+        body: isFormData ? payload : JSON.stringify(payload),
     });
 }
 
