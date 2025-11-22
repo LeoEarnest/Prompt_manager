@@ -39,3 +39,6 @@ backup_db/
 
 # Agent
 AGENTS.md
+
+# Uploaded prompt images
+app/static/uploads/
