@@ -14,6 +14,8 @@ import {
     refreshNavigationTree,
     getFirstPromptButton,
     initUI,
+    setDomainExpanded,
+    setSubtopicExpanded,
 } from './modules/ui.js';
 
 function handleSuccessfulUpdate(responseBody, buttonToFocus) {
@@ -56,9 +58,19 @@ async function handleNavPanelClick(event) {
     if (header) {
         event.preventDefault();
         const content = header.nextElementSibling;
+        let isExpanded = false;
         if (content && content.classList.contains('collapsible-content')) {
             header.classList.toggle('expanded');
             content.classList.toggle('expanded');
+            isExpanded = header.classList.contains('expanded');
+        }
+
+        const subtopicEl = header.closest('.subtopic');
+        const domainEl = header.closest('.domain');
+        if (subtopicEl && subtopicEl.dataset.subtopicId) {
+            setSubtopicExpanded(subtopicEl.dataset.subtopicId, isExpanded);
+        } else if (domainEl && domainEl.dataset.domainId) {
+            setDomainExpanded(domainEl.dataset.domainId, isExpanded);
         }
         return;
     }
@@ -73,6 +85,12 @@ async function handleNavPanelClick(event) {
 
         const domainName = trigger.dataset.domain || 'Domain';
         const subtopicName = trigger.dataset.subtopic || 'Subtopic';
+        if (trigger.dataset.domainId) {
+            setDomainExpanded(trigger.dataset.domainId, true);
+        }
+        if (trigger.dataset.subtopicId) {
+            setSubtopicExpanded(trigger.dataset.subtopicId, true);
+        }
 
         setState({
             currentPromptId: promptId,

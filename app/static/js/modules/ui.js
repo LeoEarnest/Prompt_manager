@@ -2,6 +2,123 @@ import * as dom from './dom.js';
 import * as api from './api.js';
 import { DEFAULTS, updateState, getStateValue, escapeSelector } from './state.js';
 
+const NAV_EXPANSION_STORAGE_KEY = 'promptManager.navExpansion';
+
+const createEmptyExpansionState = () => ({
+    domains: new Set(),
+    subtopics: new Set(),
+});
+
+const loadExpansionState = () => {
+    const fallback = createEmptyExpansionState();
+    try {
+        if (!window.localStorage) return fallback;
+        const raw = window.localStorage.getItem(NAV_EXPANSION_STORAGE_KEY);
+        if (!raw) return fallback;
+        const parsed = JSON.parse(raw);
+        const domains = new Set(Array.isArray(parsed?.domains) ? parsed.domains.map(String) : []);
+        const subtopics = new Set(Array.isArray(parsed?.subtopics) ? parsed.subtopics.map(String) : []);
+        return { domains, subtopics };
+    } catch (error) {
+        console.warn('Failed to read nav expansion state from storage:', error);
+        return fallback;
+    }
+};
+
+const persistExpansionState = (state) => {
+    try {
+        if (!window.localStorage) return;
+        const payload = {
+            domains: Array.from(state.domains),
+            subtopics: Array.from(state.subtopics),
+        };
+        window.localStorage.setItem(NAV_EXPANSION_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+        console.warn('Failed to persist nav expansion state:', error);
+    }
+};
+
+const navExpansionState = loadExpansionState();
+
+const applyHeaderExpansion = (headerEl, contentEl, isExpanded) => {
+    if (headerEl) headerEl.classList.toggle('expanded', isExpanded);
+    if (contentEl) contentEl.classList.toggle('expanded', isExpanded);
+};
+
+export const setDomainExpanded = (domainId, isExpanded) => {
+    if (!domainId) return;
+    const key = String(domainId);
+    if (isExpanded) {
+        navExpansionState.domains.add(key);
+    } else {
+        navExpansionState.domains.delete(key);
+    }
+    persistExpansionState(navExpansionState);
+};
+
+export const setSubtopicExpanded = (subtopicId, isExpanded) => {
+    if (!subtopicId) return;
+    const key = String(subtopicId);
+    if (isExpanded) {
+        navExpansionState.subtopics.add(key);
+    } else {
+        navExpansionState.subtopics.delete(key);
+    }
+    persistExpansionState(navExpansionState);
+};
+
+const applyStoredExpansions = () => {
+    if (!dom.hierarchyContainer) return;
+
+    const domainSelector = '.domain';
+    dom.hierarchyContainer.querySelectorAll(domainSelector).forEach((domainEl) => {
+        const domainId = domainEl.dataset.domainId ? String(domainEl.dataset.domainId) : null;
+        const shouldExpand = domainId ? navExpansionState.domains.has(domainId) : false;
+        const header = domainEl.querySelector('.domain-name.collapsible-header');
+        const content = domainEl.querySelector('.subtopics.collapsible-content');
+        applyHeaderExpansion(header, content, shouldExpand);
+    });
+
+    const subtopicSelector = '.subtopic';
+    dom.hierarchyContainer.querySelectorAll(subtopicSelector).forEach((subtopicEl) => {
+        const subtopicId = subtopicEl.dataset.subtopicId ? String(subtopicEl.dataset.subtopicId) : null;
+        const shouldExpand = subtopicId ? navExpansionState.subtopics.has(subtopicId) : false;
+        const header = subtopicEl.querySelector('.subtopic-name.collapsible-header');
+        const content = subtopicEl.querySelector('.prompt-list.collapsible-content');
+        applyHeaderExpansion(header, content, shouldExpand);
+    });
+};
+
+const expandPromptAncestors = (promptButton) => {
+    if (!promptButton || !dom.hierarchyContainer) return;
+
+    const { domainId, subtopicId } = promptButton.dataset;
+
+    if (domainId) {
+        const domainEl = dom.hierarchyContainer.querySelector(
+            `[data-domain-id="${escapeSelector(String(domainId))}"]`
+        );
+        if (domainEl) {
+            const header = domainEl.querySelector('.domain-name.collapsible-header');
+            const content = domainEl.querySelector('.subtopics.collapsible-content');
+            applyHeaderExpansion(header, content, true);
+            setDomainExpanded(domainId, true);
+        }
+    }
+
+    if (subtopicId) {
+        const subtopicEl = dom.hierarchyContainer.querySelector(
+            `[data-subtopic-id="${escapeSelector(String(subtopicId))}"]`
+        );
+        if (subtopicEl) {
+            const header = subtopicEl.querySelector('.subtopic-name.collapsible-header');
+            const content = subtopicEl.querySelector('.prompt-list.collapsible-content');
+            applyHeaderExpansion(header, content, true);
+            setSubtopicExpanded(subtopicId, true);
+        }
+    }
+};
+
 export function renderPromptGallery(images = [], promptId = null) {
     if (!Array.isArray(images) || images.length === 0) return null;
 
@@ -194,6 +311,8 @@ export function renderHierarchy(structure) {
         domainArticle.appendChild(subtopicsDiv);
         dom.hierarchyContainer.appendChild(domainArticle);
     });
+
+    applyStoredExpansions();
 }
 
 export async function refreshNavigationTree(focusPromptId = null) {
@@ -205,6 +324,7 @@ export async function refreshNavigationTree(focusPromptId = null) {
             const selector = `.prompt-button[data-id="${escapeSelector(String(focusPromptId))}"]`;
             const buttonToFocus = dom.hierarchyContainer.querySelector(selector);
             if (buttonToFocus) {
+                expandPromptAncestors(buttonToFocus);
                 return buttonToFocus;
             }
         }
