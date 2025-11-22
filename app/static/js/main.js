@@ -40,7 +40,7 @@ function handleSuccessfulUpdate(responseBody, buttonToFocus) {
         if (newMeta.isTemplate) {
             renderTemplatePromptDetail(newMeta);
         } else {
-            setPromptContent(newMeta.content || '', newMeta.images);
+            setPromptContent(newMeta.content || '', newMeta.images, newMeta.id);
             enableCopyButton(newMeta.content || '');
         }
         enableDetailActions();
@@ -107,7 +107,7 @@ async function handleNavPanelClick(event) {
             if (newMeta.isTemplate) {
                 renderTemplatePromptDetail(newMeta);
             } else {
-                setPromptContent(newMeta.content || '', newMeta.images);
+                setPromptContent(newMeta.content || '', newMeta.images, newMeta.id);
                 enableCopyButton(newMeta.content || '');
             }
             enableDetailActions();
@@ -149,6 +149,46 @@ async function handleDeleteClick(event) {
         } else {
             window.alert('Unable to delete prompt. Please try again.');
         }
+    }
+}
+
+async function handlePromptImageDelete(event) {
+    const button = event.target.closest('[data-role="delete-image"]');
+    if (!button) return;
+    event.preventDefault();
+
+    const promptId = Number(button.dataset.promptId);
+    const imageId = Number(button.dataset.imageId);
+    if (!promptId || !imageId) return;
+
+    if (!window.confirm('删除这张图片？')) return;
+
+    try {
+        await api.deletePromptImage(promptId, imageId);
+        const payload = await api.getPrompt(promptId);
+        if (!payload) return;
+
+        const meta = {
+            ...(getStateValue('currentPromptMeta') || {}),
+            id: promptId,
+            title: payload.title || DEFAULTS.PROMPT_TITLE,
+            content: payload.content || '',
+            isTemplate: Boolean(payload.is_template),
+            configurableOptions: payload.configurable_options || null,
+            images: Array.isArray(payload.images) ? payload.images : [],
+        };
+        setState({ currentPromptMeta: meta, currentPromptId: promptId });
+
+        if (meta.isTemplate) {
+            renderTemplatePromptDetail(meta);
+        } else {
+            setPromptContent(meta.content || '', meta.images, meta.id);
+            enableCopyButton(meta.content || '');
+        }
+        enableDetailActions();
+    } catch (error) {
+        console.error(error);
+        window.alert('删除图片失败，请稍后重试。');
     }
 }
 
@@ -261,6 +301,8 @@ function initialize() {
         // Manually trigger the visibility check for the subtopic clear button
         dom.clearSubtopicButton.classList.remove('is-visible');
     });
+
+    dom.promptContent.addEventListener('click', handlePromptImageDelete);
 }
 
 document.addEventListener('DOMContentLoaded', initialize);

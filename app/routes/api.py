@@ -197,6 +197,25 @@ def _remove_image_file(filename: str) -> None:
         current_app.logger.warning('Failed to remove image file %s', file_path)
 
 
+@api_bp.route('/prompts/<int:prompt_id>/images/<int:image_id>', methods=['DELETE'])
+def delete_prompt_image(prompt_id: int, image_id: int) -> Response:
+    """Delete a single image associated with a prompt."""
+
+    prompt = db.session.get(Prompt, prompt_id)
+    if prompt is None:
+        return jsonify({'error': 'Prompt not found'}), 404
+
+    image = db.session.get(PromptImage, image_id)
+    if image is None or image.prompt_id != prompt_id:
+        return jsonify({'error': 'Image not found'}), 404
+
+    _remove_image_file(image.filename)
+    db.session.delete(image)
+    db.session.commit()
+
+    return Response(status=204)
+
+
 def _validate_prompt_payload(payload: dict[str, Any]) -> tuple[dict[str, str], dict[str, Any]]:
     """Normalize prompt payload and return (errors, normalized_fields)."""
 

@@ -64,3 +64,7 @@ export async function savePrompt(payload, editingPromptId) {
 export async function deletePrompt(promptId) {
     return fetchJSON(`/api/prompts/${promptId}`, { method: 'DELETE' });
 }
+
+export async function deletePromptImage(promptId, imageId) {
+    return fetchJSON(`/api/prompts/${promptId}/images/${imageId}`, { method: 'DELETE' });
+}

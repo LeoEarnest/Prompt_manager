@@ -172,7 +172,7 @@ export function renderTemplatePromptDetail(promptMeta) {
     const images = Array.isArray(promptMeta.images) ? promptMeta.images : [];
 
     if (!options || Object.keys(options).length === 0) {
-        setPromptContent(baseContent, images);
+        setPromptContent(baseContent, images, promptMeta.id);
         enableCopyButton(baseContent || '');
         return;
     }
@@ -226,7 +226,7 @@ export function renderTemplatePromptDetail(promptMeta) {
     dom.promptContent.appendChild(container);
     updateTemplatePreview();
 
-    const gallery = renderPromptGallery(images);
+    const gallery = renderPromptGallery(images, promptMeta.id);
     if (gallery) {
         dom.promptContent.appendChild(gallery);
     }

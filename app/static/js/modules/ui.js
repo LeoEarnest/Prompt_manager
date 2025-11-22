@@ -2,7 +2,7 @@ import * as dom from './dom.js';
 import * as api from './api.js';
 import { DEFAULTS, updateState, getStateValue, escapeSelector } from './state.js';
 
-export function renderPromptGallery(images = []) {
+export function renderPromptGallery(images = [], promptId = null) {
     if (!Array.isArray(images) || images.length === 0) return null;
 
     const gallery = dom.doc.createElement('div');
@@ -19,13 +19,26 @@ export function renderPromptGallery(images = []) {
         img.loading = 'lazy';
 
         figure.appendChild(img);
+
+        if (promptId && image.id) {
+            const removeButton = dom.doc.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'prompt-images__remove';
+            removeButton.dataset.imageId = image.id;
+            removeButton.dataset.promptId = promptId;
+            removeButton.dataset.role = 'delete-image';
+            removeButton.setAttribute('aria-label', 'Remove image');
+            removeButton.textContent = '×';
+            figure.appendChild(removeButton);
+        }
+
         gallery.appendChild(figure);
     });
 
     return gallery.childElementCount ? gallery : null;
 }
 
-export function setPromptContent(text, images = []) {
+export function setPromptContent(text, images = [], promptId = null) {
     updateState('activeTemplateDetail', null);
     dom.promptContent.innerHTML = '';
 
@@ -34,7 +47,7 @@ export function setPromptContent(text, images = []) {
     textBlock.textContent = text;
     dom.promptContent.appendChild(textBlock);
 
-    const gallery = renderPromptGallery(images);
+    const gallery = renderPromptGallery(images, promptId);
     if (gallery) {
         dom.promptContent.appendChild(gallery);
     }
